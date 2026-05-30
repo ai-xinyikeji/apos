@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1779786919404,
+      "tag": "0000_certain_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1780021975058,
+      "tag": "0001_aberrant_the_fallen",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780022009808,
+      "tag": "0002_illegal_anthem",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780024910877,
+      "tag": "0003_clumsy_devos",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780025550090,
+      "tag": "0004_third_proudstar",
+      "breakpoints": true
+    }
+  ]
+}

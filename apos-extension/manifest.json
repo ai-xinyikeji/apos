@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "APOS Extension",
+  "version": "1.0.0",
+  "description": "AI Product OS 浏览器伴侣 - 自动同步 ChatGPT 和 Gemini 的 Session Cookies 到本地 APOS",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "APOS Extension"
+  },
+  "permissions": [
+    "cookies",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*.chatgpt.com/*",
+    "https://*.openai.com/*",
+    "https://*.google.com/*",
+    "https://gemini.google.com/*",
+    "https://*.moonshot.cn/*",
+    "https://kimi.moonshot.cn/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:3000/settings"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
