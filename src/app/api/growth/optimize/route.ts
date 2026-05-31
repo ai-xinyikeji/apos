@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     
     const absolutePath = path.isAbsolute(filePath) 
       ? filePath 
-      : path.join(/* turbopackIgnore: true */ process.cwd(), filePath);
+      : path.join(process.cwd(), filePath);
       
     const result = await uiOptimizer.optimizeComponent(componentName, absolutePath);
     
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     if (result.codeSuggestions) {
       result.codeSuggestions = result.codeSuggestions.map(suggestion => ({
         ...suggestion,
-        filePath: path.relative(/* turbopackIgnore: true */ process.cwd(), suggestion.filePath),
+        filePath: path.relative(process.cwd(), suggestion.filePath),
       }));
     }
     

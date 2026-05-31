@@ -3,7 +3,7 @@ import { db } from './db';
 import { settings } from './schema';
 import { eq } from 'drizzle-orm';
 
-export const git = simpleGit(/* turbopackIgnore: true */ process.cwd());
+export const git = simpleGit(process.cwd());
 
 export interface RepoDetails {
   owner: string;
@@ -35,12 +35,15 @@ export async function getRepoDetails(): Promise<RepoDetails | null> {
 }
 
 /**
- * Creates and checks out a new branch from the current HEAD.
- * Does NOT switch to main first — branches off wherever we currently are,
- * which avoids checkout conflicts when the working tree is dirty.
+ * Creates and checks out a new branch.
  */
 export async function createBranch(branchName: string) {
   try {
+    // Switch to main or main branch to branch off of
+    const branches = await git.branch();
+    const mainBranch = branches.all.includes('main') ? 'main' : 'master';
+    
+    await git.checkout(mainBranch);
     await git.checkoutLocalBranch(branchName);
   } catch (error) {
     console.error(`Failed to create branch ${branchName}:`, error);

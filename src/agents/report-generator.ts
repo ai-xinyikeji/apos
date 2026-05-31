@@ -94,7 +94,7 @@ ${marketContext}
       }
 
       // 2. Ensure data/reports directory exists
-      const reportsDir = path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'reports');
+      const reportsDir = path.join(process.cwd(), 'data', 'reports');
       if (!fs.existsSync(reportsDir)) {
         fs.mkdirSync(reportsDir, { recursive: true });
       }

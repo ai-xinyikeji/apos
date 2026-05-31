@@ -23,7 +23,7 @@ export class OpenHandsAgent extends BaseAgent<OpenHandsInput, OpenHandsOutput> {
   public readonly name = 'OpenHands';
 
   public async run(input: OpenHandsInput, runId: string): Promise<OpenHandsOutput> {
-    const { task, workspacePath = /* turbopackIgnore: true */ process.cwd() } = input;
+    const { task, workspacePath = process.cwd() } = input;
     await this.trace(runId, 'Start', 'info', `开始调用 OpenHands 执行任务: "${task.slice(0, 60)}..."`);
 
     // 1. Retrieve OpenHands settings

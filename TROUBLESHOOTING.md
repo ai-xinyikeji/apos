@@ -1,148 +1,293 @@
-# 故障排查
+# APOS 故障排查指南
 
-## 服务启动问题
+## 🚨 Claude Desktop 对话中断问题
 
-### APOS 服务未运行
+### 症状
+- Claude Desktop 回答到一半就停止
+- 出现超时错误
+- MCP 工具调用失败
+
+### 根本原因
+**APOS 开发服务器没有运行**
+
+### 快速解决
+
+#### 方法 1: 使用健康检查脚本
 
 ```bash
-# 检查状态
+cd /Users/clive/Documents/source/cousor/apos
 ./check-apos.sh
+```
+
+如果显示 "❌ APOS 服务器: 未运行"，运行：
+
+```bash
+./start-apos.sh
+```
+
+#### 方法 2: 手动启动
+
+```bash
+cd /Users/clive/Documents/source/cousor/apos
+npm run dev
+```
+
+保持终端窗口打开，不要关闭。
+
+#### 方法 3: 后台运行
+
+```bash
+cd /Users/clive/Documents/source/cousor/apos
+nohup npm run dev > apos.log 2>&1 &
+```
+
+查看日志：
+```bash
+tail -f apos.log
+```
+
+停止服务：
+```bash
+lsof -ti :3000 | xargs kill
+```
+
+## 🔍 常见问题
+
+### Q1: 如何确认 APOS 正在运行？
+
+```bash
+# 方法 1: 使用健康检查脚本
+./check-apos.sh
+
+# 方法 2: 检查端口
 lsof -i :3000
 
-# 启动服务
+# 方法 3: 访问网页
+open http://localhost:3000
+```
+
+### Q2: 为什么 Claude Desktop 还是会中断？
+
+可能的原因：
+
+1. **网络问题**
+   - 检查网络连接
+   - 尝试切换网络
+
+2. **Token 限制**
+   - 对话上下文过长
+   - 解决方案：开始新对话
+
+3. **MCP 工具超时**
+   - LM Studio 响应慢
+   - 解决方案：使用更快的模型
+
+4. **Claude API 限流**
+   - 请求过于频繁
+   - 解决方案：等待几分钟
+
+### Q3: 如何避免中断？
+
+**推荐方案：使用 Claude CLI + APOS 代理**
+
+```bash
+# 1. 设置环境变量
+export ANTHROPIC_BASE_URL=http://localhost:3000/api/v1
+export ANTHROPIC_API_KEY=你的真实API密钥
+
+# 2. 使用 Claude CLI
+claude "你的问题"
+```
+
+**优势**：
+- ✅ 不会中断
+- ✅ 自动使用本地模型（免费）
+- ✅ 自动上下文压缩
+- ✅ 完全透明
+
+### Q4: Claude Desktop 和 Claude CLI 有什么区别？
+
+| 特性 | Claude Desktop | Claude CLI + APOS |
+|------|---------------|-------------------|
+| 对话模型 | Claude API（付费） | 本地模型（免费） |
+| 工具执行 | 本地模型（免费） | 本地模型（免费） |
+| 稳定性 | 可能中断 | 不会中断 |
+| 成本 | 对话消耗 Token | 完全免费 |
+| 推荐度 | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+
+### Q5: 如何查看 APOS 日志？
+
+```bash
+# 如果使用 npm run dev
+# 日志直接显示在终端
+
+# 如果使用后台运行
+tail -f apos.log
+
+# 查看最近 100 行
+tail -n 100 apos.log
+```
+
+### Q6: 如何重启 APOS？
+
+```bash
+# 1. 停止服务
+lsof -ti :3000 | xargs kill
+
+# 2. 启动服务
 ./start-apos.sh
-# 或
-npm run dev
 
-# 后台运行
-nohup npm run dev > apos.log 2>&1 &
-
-# 重启
+# 或者一行命令
 lsof -ti :3000 | xargs kill && ./start-apos.sh
 ```
 
-### 数据库错误
+### Q7: LM Studio 是必需的吗？
 
+**不是必需的**，但强烈推荐：
+
+- ✅ 使用 LM Studio：完全免费，使用本地模型
+- ⚠️ 不使用 LM Studio：会回退到 Claude API（付费）
+
+检查 LM Studio 状态：
 ```bash
-# 重新初始化 Schema
-npm run db:push
-
-# 查看数据库
-npm run db:studio
+lsof -i :1234
 ```
 
-### 构建失败
+如果未运行：
+1. 打开 LM Studio 应用
+2. 加载模型（推荐 Gemma 4 或 Qwen 3.5）
+3. 点击 "Start Server"
 
-```bash
-# 查看详细错误
-npm run build
+### Q8: 如何配置自动启动？
 
-# 清理缓存重试
-rm -rf .next && npm run build
+#### 方法 1: 使用 launchd（macOS 推荐）
+
+创建 `~/Library/LaunchAgents/com.apos.dev.plist`：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.apos.dev</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/clive/Documents/source/cousor/apos/start-apos.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/clive/Documents/source/cousor/apos/apos.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/clive/Documents/source/cousor/apos/apos-error.log</string>
+</dict>
+</plist>
 ```
 
-## Ollama 本地模型
-
-### 检查 Ollama 状态
-
+加载服务：
 ```bash
-# 检查是否运行
-lsof -i :11434
-curl http://localhost:11434/v1/models
-
-# 启动 Ollama
-ollama serve
-
-# 拉取推荐模型
-ollama pull qwen2.5-coder:7b   # 代码任务（推荐）
-ollama pull gemma4:31b          # 通用任务（需要较大内存）
+launchctl load ~/Library/LaunchAgents/com.apos.dev.plist
 ```
 
-### Ollama 不可用时的回退
+卸载服务：
+```bash
+launchctl unload ~/Library/LaunchAgents/com.apos.dev.plist
+```
 
-系统会自动回退到云端模型（需要配置 API Key）。在 `/settings` 页面配置 Anthropic / OpenAI / Google API Key 作为备用。
-
-## Claude CLI 代理
-
-### 配置
+#### 方法 2: 添加到 shell 配置
 
 ```bash
 # 添加到 ~/.zshrc
-export ANTHROPIC_BASE_URL=http://localhost:3000/api/v1
-export ANTHROPIC_API_KEY=your_key
-
+echo 'alias start-apos="cd /Users/clive/Documents/source/cousor/apos && ./start-apos.sh"' >> ~/.zshrc
+echo 'alias check-apos="cd /Users/clive/Documents/source/cousor/apos && ./check-apos.sh"' >> ~/.zshrc
 source ~/.zshrc
+
+# 使用
+start-apos
+check-apos
 ```
 
-### 验证
+## 🎯 最佳实践
+
+### 1. 每天开始工作前
 
 ```bash
-claude "hello"
-# 应该看到响应头包含 X-APOS-Model
+cd /Users/clive/Documents/source/cousor/apos
+./check-apos.sh
 ```
 
-### 常见问题
+### 2. 使用 Claude Desktop 前
 
-**请求超时**：确认 APOS 服务在 `http://localhost:3000` 正常运行
-
-**模型路由到云端**：检查 Ollama 是否运行，或在 `/settings` 开启"Ollama 优先"
-
-## MCP 工具（Claude Desktop）
-
-### 配置检查
-
+确保 APOS 正在运行：
 ```bash
-# 查看 MCP 配置
-cat ~/.config/claude/claude_desktop_config.json
-
-# 重新生成配置
-./scripts/setup-claude-desktop.sh
+lsof -i :3000
 ```
 
-### 工具调用失败
+### 3. 遇到中断时
 
-1. 确认 APOS 服务运行中
-2. 重启 Claude Desktop
-3. 查看 APOS 日志：`tail -f apos.log`
+1. 检查 APOS 状态：`./check-apos.sh`
+2. 如果未运行，启动：`./start-apos.sh`
+3. 重启 Claude Desktop
+4. 重新开始对话
 
-## 成本和路由系统
+### 4. 长期使用
 
-### 路由决策超时
-
-- 检查数据库连接
-- 检查 `custom_rules` 表是否有大量规则（> 100 条）
-
-### 成本记录缺失
-
-- 确认 `cost_records` 表已创建：`npm run db:push`
-- 检查 CostRecorder 批量队列是否正常 flush
-
-### 预算预警不触发
-
-- 确认 `budget_monthly`/`budget_daily` 等设置已配置
-- 检查 `budget_alert_thresholds` 格式是否为 JSON 数组
-
-## 紧急重置
+**推荐切换到 Claude CLI**：
 
 ```bash
-# 完全重置（会丢失数据库数据）
+# 永久配置
+echo 'export ANTHROPIC_BASE_URL=http://localhost:3000/api/v1' >> ~/.zshrc
+echo 'export ANTHROPIC_API_KEY=你的真实API密钥' >> ~/.zshrc
+source ~/.zshrc
+
+# 使用
+claude "你的问题"
+```
+
+## 📊 性能优化
+
+### 1. 使用更快的本地模型
+
+在 LM Studio 中加载：
+- **Qwen 3.5 9B**（推荐，速度快）
+- **Gemma 4 9B**（质量高）
+- **Llama 3.3 70B**（最高质量，需要强大硬件）
+
+### 2. 启用上下文压缩
+
+APOS 自动压缩上下文，节省 70% Token。
+
+### 3. 使用 Prompt Caching
+
+对于重复的上下文，APOS 会自动缓存，降低 90% 成本。
+
+## 🆘 紧急救援
+
+如果所有方法都失败：
+
+```bash
+# 1. 完全重置
 lsof -ti :3000 | xargs kill
-rm -rf .next node_modules
+rm -rf /Users/clive/Documents/source/cousor/apos/.next
+rm -rf /Users/clive/Documents/source/cousor/apos/node_modules
+
+# 2. 重新安装
+cd /Users/clive/Documents/source/cousor/apos
 npm install
-npm run db:push
+
+# 3. 重新启动
 npm run dev
 ```
 
-## 查看日志
+## 📞 获取帮助
 
-```bash
-# 开发模式日志（直接在终端）
-npm run dev
+- 查看日志：`tail -f apos.log`
+- 查看错误：`tail -f apos-error.log`
+- 提交 Issue：https://github.com/your-repo/apos/issues
 
-# 后台运行日志
-tail -f apos.log
-tail -f apos-error.log
+---
 
-# Agent 执行日志（数据库）
-npm run db:studio  # 查看 agent_traces 表
-```
+**记住**：使用 Claude CLI + APOS 代理是最稳定、最经济的方案！🚀

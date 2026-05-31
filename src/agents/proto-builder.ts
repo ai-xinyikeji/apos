@@ -188,11 +188,11 @@ Return a JSON array of objects structured like:
       // Step 4: Write files to workspace
       await this.trace(runId, '写入文件', 'info', `正在向本地工作空间写入 ${files.length} 个文件...`);
       for (const file of files) {
-        const fullPath = path.join(/* turbopackIgnore: true */ process.cwd(), file.path);
+        const fullPath = path.join(process.cwd(), file.path);
         const dir = path.dirname(fullPath);
         
         // Safety check to prevent writing outside project root
-        if (!fullPath.startsWith(/* turbopackIgnore: true */ process.cwd())) {
+        if (!fullPath.startsWith(process.cwd())) {
           throw new Error(`Security Exception: Cannot write to path outside project workspace: ${file.path}`);
         }
 
@@ -293,7 +293,7 @@ Return a JSON array of objects structured like:
 
       try {
         // Run compilation check (npm run build)
-        await execPromise('npm run build', { cwd: /* turbopackIgnore: true */ process.cwd() });
+        await execPromise('npm run build', { cwd: process.cwd() });
         await this.trace(runId, '自动修复成功', 'success', `本地编译类型检查成功通过！代码无任何语法或类型错误。`);
         return true;
       } catch (err: any) {
@@ -351,9 +351,9 @@ Return your fixed code for these files as a JSON array of objects structured exa
 
         // Rewrite healed files to workspace
         for (const file of healedFiles) {
-          const fullPath = path.join(/* turbopackIgnore: true */ process.cwd(), file.path);
+          const fullPath = path.join(process.cwd(), file.path);
           
-          if (!fullPath.startsWith(/* turbopackIgnore: true */ process.cwd())) {
+          if (!fullPath.startsWith(process.cwd())) {
             continue;
           }
 
@@ -377,7 +377,7 @@ Return your fixed code for these files as a JSON array of objects structured exa
   private async assessFeasibility(description: string, llm: any, runId: string): Promise<string> {
     let availableComponents: string[] = [];
     try {
-      const uiPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'src/components/ui');
+      const uiPath = path.join(process.cwd(), 'src/components/ui');
       if (fs.existsSync(uiPath)) {
         availableComponents = fs.readdirSync(uiPath)
           .filter(file => file.endsWith('.tsx'))

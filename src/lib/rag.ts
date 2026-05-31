@@ -95,7 +95,7 @@ export async function indexRepository(
   workspacePathOrTraceCallback?: string | ((message: string) => Promise<void>),
   traceCallback?: (message: string) => Promise<void>
 ): Promise<number> {
-  let workspacePath = /* turbopackIgnore: true */ process.cwd();
+  let workspacePath = process.cwd();
   let actualTraceCallback = traceCallback;
 
   if (typeof workspacePathOrTraceCallback === 'string') {
@@ -104,7 +104,7 @@ export async function indexRepository(
     actualTraceCallback = workspacePathOrTraceCallback;
   }
 
-  const APOS_DIR = process.env.APOS_DIR || /* turbopackIgnore: true */ process.cwd();
+  const APOS_DIR = process.env.APOS_DIR || process.cwd();
   const DB_DIR = path.join(APOS_DIR, 'data/vectordb');
   const lancedb = await import('@lancedb/lancedb');
   
@@ -178,7 +178,7 @@ export async function indexRepository(
  * Searches the LanceDB database for matching code chunks using semantic vector search and enriches with CodeGraph relational context.
  */
 export async function searchRepository(query: string, limit: number = 3): Promise<Array<{ text: string; filePath: string; startLine: number; score?: number }>> {
-  const APOS_DIR = process.env.APOS_DIR || /* turbopackIgnore: true */ process.cwd();
+  const APOS_DIR = process.env.APOS_DIR || process.cwd();
   const DB_DIR = path.join(APOS_DIR, 'data/vectordb');
   
   if (!fs.existsSync(DB_DIR)) {

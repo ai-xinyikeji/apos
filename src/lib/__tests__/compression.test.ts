@@ -11,22 +11,19 @@ import {
 } from '../compression';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mock Ollama availability + model list
+// Mock LM Studio availability + model list
 // ─────────────────────────────────────────────────────────────────────────────
 
 jest.mock('../llm', () => ({
-  isOllamaAvailable: jest.fn(),
-  getOllamaModels: jest.fn(),
-  routeModel: jest.fn(),
-  // Backward compatibility aliases
   isLMStudioAvailable: jest.fn(),
   getLMStudioModels: jest.fn(),
+  routeModel: jest.fn(),
 }));
 
-import { isOllamaAvailable, getOllamaModels } from '../llm';
+import { isLMStudioAvailable, getLMStudioModels } from '../llm';
 
-const mockIsAvailable = isOllamaAvailable as jest.MockedFunction<typeof isOllamaAvailable>;
-const mockGetModels = getOllamaModels as jest.MockedFunction<typeof getOllamaModels>;
+const mockIsAvailable = isLMStudioAvailable as jest.MockedFunction<typeof isLMStudioAvailable>;
+const mockGetModels = getLMStudioModels as jest.MockedFunction<typeof getLMStudioModels>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: build a large code block string
@@ -581,28 +578,23 @@ describe('compressMessages', () => {
     jest.restoreAllMocks();
     mockIsAvailable.mockReset();
     mockGetModels.mockReset();
-    // Set default mock return values
-    mockIsAvailable.mockResolvedValue(false);
-    mockGetModels.mockResolvedValue([]);
   });
 
   it('should return original messages when LM Studio unavailable and AST disabled', async () => {
     mockIsAvailable.mockResolvedValue(false);
-    mockGetModels.mockResolvedValue([]);
 
     const messages = [{ role: 'user', content: 'Hello world' }];
     const result = await compressMessages(messages, 'You are helpful.', 'light');
 
     expect(result.compressedMessages).toEqual(messages);
     expect(result.compressedSystem).toBe('You are helpful.');
-    expect(result.stats.ollamaAvailable).toBe(false);
+    expect(result.stats.lmStudioAvailable).toBe(false);
     expect(result.stats.reductionPercent).toBe(0);
     expect(result.stats.compressionLevel).toBe('light');
   });
 
   it('should compress messages with medium level', async () => {
     mockIsAvailable.mockResolvedValue(false); // AST only
-    mockGetModels.mockResolvedValue([]);
 
     const largeBlock = '```typescript\n' + sampleTypeScriptCode.repeat(2) + '\n```';
     const messages = [
@@ -618,7 +610,6 @@ describe('compressMessages', () => {
 
   it('should compress messages with aggressive level', async () => {
     mockIsAvailable.mockResolvedValue(false);
-    mockGetModels.mockResolvedValue([]);
 
     const largeBlock = '```typescript\n' + sampleTypeScriptCode + '\n```';
     const messages = [
@@ -648,7 +639,6 @@ describe('compressMessages', () => {
 
   it('should handle Anthropic content block arrays', async () => {
     mockIsAvailable.mockResolvedValue(false);
-    mockGetModels.mockResolvedValue([]);
 
     const largeBlock = '```typescript\n' + sampleTypeScriptCode + '\n```';
     const messages = [
@@ -667,7 +657,6 @@ describe('compressMessages', () => {
 
   it('should correctly calculate reduction statistics', async () => {
     mockIsAvailable.mockResolvedValue(false);
-    mockGetModels.mockResolvedValue([]);
 
     const messages = [{ role: 'user', content: 'x'.repeat(100) }];
     const result = await compressMessages(messages, 'sys', 'medium');
@@ -680,7 +669,6 @@ describe('compressMessages', () => {
 
   it('should compress system prompt if large enough', async () => {
     mockIsAvailable.mockResolvedValue(false);
-    mockGetModels.mockResolvedValue([]);
 
     const largeSystem = '```typescript\n' + sampleTypeScriptCode.repeat(10) + '\n```';
     const messages = [{ role: 'user', content: 'Hello' }];

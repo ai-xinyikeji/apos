@@ -17,7 +17,7 @@ async function main() {
   if (command === 'config') {
     const configPath = path.join(os.homedir(), '.claude', 'claude_desktop_config.json');
     console.log(`Writing Claude Code MCP configuration to ${configPath}...`);
-    const result = writeClaudeCodeConfig(configPath, /* turbopackIgnore: true */ process.cwd());
+    const result = writeClaudeCodeConfig(configPath, process.cwd());
     if (result.success) {
       console.log(`✅ Success: ${result.message}`);
     } else {
@@ -25,7 +25,7 @@ async function main() {
       process.exit(1);
     }
   } else if (command === 'index') {
-    const targetPath = args[1] ? path.resolve(args[1]) : /* turbopackIgnore: true */ process.cwd();
+    const targetPath = args[1] ? path.resolve(args[1]) : process.cwd();
     console.log(`Indexing workspace at ${targetPath}...`);
     try {
       const count = await indexRepository(async (msg) => {

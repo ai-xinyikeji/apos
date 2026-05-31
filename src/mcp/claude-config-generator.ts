@@ -23,7 +23,7 @@ export interface McpConfig {
  * 获取 APOS MCP Server 的配置对象
  */
 export function generateMcpConfig(aposDir?: string): McpConfig {
-  const dir = aposDir ?? /* turbopackIgnore: true */ process.cwd();
+  const dir = aposDir ?? process.cwd();
   const serverScript = path.join(dir, 'src/mcp/server.ts');
   
   return {

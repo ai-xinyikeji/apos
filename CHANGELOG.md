@@ -9,65 +9,155 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 - Chrome extension completion
+- Unit test coverage
 - WebSocket real-time updates
 - Multi-repository support
 - Team collaboration features
-- Performance monitoring panel
-
-## [0.2.0] - 2026-05-30
-
-### Changed
-- **Ollama 替换 LM Studio** — 本地模型从 LM Studio (port 1234) 迁移到 Ollama (port 11434)，支持 `OLLAMA_BASE_URL` 环境变量配置
-- **Claude 集成清理** — 从 ProtoBuilder 和 ReviewBot 中移除 ClaudeOptimizer，统一使用 `generateText()`
-- **Chrome 扩展图标** — 生成 APOS 专属品牌图标（indigo 渐变 A 字形）
-
-### Fixed
-- Next.js 15 动态路由 `params` 需要 `await` 的类型错误（3 个路由文件）
-- `compression.ts` 中残留的旧函数名调用
-- `custom-rules-engine.ts` 中 `createdAt` 可能为 null 的类型错误
-
-### Added
-- 智能路由系统（EnhancedRoutingSystem）— 多维度路由决策
-- 成本追踪系统 — 实时仪表板、预算预警、自动降级
-- Task DAG 并行系统 — 依赖管理、并行执行
-- Growth OS — Metrics 收集、Feature Ranking
-- Code Graph — AST 代码图谱、变更影响分析
-- MCP 工具集成 — 15 个工具供 Claude Desktop 调用
-- Chrome 扩展 — Cookie 同步工具
 
 ## [0.1.0] - 2024-01-15
 
 ### Added
 
-- **AI Agent 系统** — ProtoBuilder、ReviewBot、SignalCollector、ReportGenerator
-- **RAG 向量检索** — LanceDB + Xenova 本地 Embedding
-- **Git 工作流** — 自动分支、提交、PR 创建
-- **多模型路由** — 支持 Anthropic / OpenAI / Google / Web Models
-- **上下文压缩** — AST + LLM 双引擎，70%+ Token 节省
-- **数据库 Schema** — settings / signals / prototypes / agent_traces 表
-- **完整 UI** — Dashboard、原型管理、洞察中心、PR 管理、设置页面
+#### Core Features
+- **AI Agent System**
+  - BaseAgent abstract class with LLM integration and trace logging
+  - ProtoBuilderAgent for prototype code generation
+  - SignalCollectorAgent for user feedback collection
+  - ReviewBotAgent for automated code review
+  - ReportGeneratorAgent for weekly insight reports
+
+- **RAG Vector Search**
+  - LanceDB integration for vector storage
+  - Xenova Transformers for local embeddings (all-MiniLM-L6-v2)
+  - Automatic codebase indexing
+  - Semantic code search for component reuse
+
+- **Git Workflow Integration**
+  - Automatic branch creation
+  - Code commit and push
+  - GitHub Pull Request creation
+  - Diff analysis for code review
+
+- **User Interface**
+  - Dashboard with statistics and recent activity
+  - Prototypes management page with real-time console
+  - Insights center for signals and reports
+  - Pull Requests management page
+  - Settings page for API configuration
+  - Components catalog for development
+
+- **API Endpoints**
+  - `/api/prototypes` - Prototype CRUD operations
+  - `/api/prototypes/run` - Trigger Agent execution
+  - `/api/insights` - Signals and reports management
+  - `/api/insights/report` - Generate weekly report
+  - `/api/pull-requests` - PR management
+  - `/api/pull-requests/review` - Trigger code review
+  - `/api/settings` - Configuration management
+  - `/api/settings/status` - System status
+  - `/api/settings/usage` - Token usage statistics
+  - `/api/traces` - Agent execution logs
+
+#### Technical Features
+- **Multi-modal Input**: Support for text + sketch image input
+- **Feasibility Assessment**: Pre-generation technical analysis
+- **Self-healing Compilation**: Automatic error fixing (up to 3 retries)
+- **Real-time Logging**: Live Agent execution console with polling
+- **Token Usage Tracking**: LLM token consumption statistics
+
+#### Database Schema
+- `settings` table for key-value configuration
+- `signals` table for user feedback signals
+- `prototypes` table for prototype projects
+- `agent_traces` table for execution logging
+
+#### UI Components
+- Complete shadcn/ui component library integration
+- Dark theme design system with slate colors
+- Responsive layouts for mobile and desktop
+- Real-time console with color-coded status
+
+#### Documentation
+- Comprehensive README with quick start guide
+- Architecture documentation (ARCHITECTURE.md)
+- API documentation (API.md)
+- Contributing guidelines (CONTRIBUTING.md)
+- This changelog (CHANGELOG.md)
+
+### Technical Stack
+- Next.js 16 with App Router
+- React 19
+- TypeScript 5
+- Tailwind CSS 4
+- Drizzle ORM with SQLite
+- LanceDB for vector storage
+- Vercel AI SDK
+- Anthropic Claude / OpenAI GPT / Google Gemini support
 
 ### Known Issues
-- No authentication system (single-user local use)
-- API keys stored in plain text
+- Chrome extension is incomplete (30% done)
+- No unit tests yet
+- No WebSocket support (using HTTP polling)
+- API keys stored in plain text (should be encrypted)
 - No rate limiting
+- No authentication system
+
+### Security
+- Path traversal protection for file writes
+- Git operations restricted to current repository
+- LLM output validation with JSON schema
+
+### Performance
+- Lazy loading of Xenova Transformers model
+- Efficient code chunking with overlap
+- Database indexes on frequently queried fields
 
 ---
 
-## Roadmap
+## Version History
 
-### 近期（1-3 个月）
-- WebSocket 实时推送（替代 HTTP 轮询）
-- 性能监控面板
-- 错误报警机制
+### [0.1.0] - 2024-01-15
+- Initial release with core Agent system, RAG search, and Git integration
 
-### 中期（3-6 个月）
-- 多仓库支持
-- 团队协作功能
-- 自定义 Agent 模板
+---
 
-### 长期（6-12 个月）
-- 云端部署版本
-- 企业级权限管理
-- Plugin 市场
-- Product Discovery（GitHub 趋势、Reddit/HN 监测、竞品分析）
+## Upgrade Guide
+
+### From Nothing to 0.1.0
+
+This is the initial release. Follow the installation guide in README.md:
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Initialize database: `npm run db:push`
+4. Configure environment variables in `.env.local`
+5. Start development server: `npm run dev`
+
+---
+
+## Breaking Changes
+
+None yet (initial release).
+
+---
+
+## Deprecations
+
+None yet (initial release).
+
+---
+
+## Contributors
+
+Thank you to all contributors who made this release possible!
+
+- Initial development team
+
+---
+
+## Links
+
+- [Repository](https://github.com/OWNER/apos)
+- [Issues](https://github.com/OWNER/apos/issues)
+- [Pull Requests](https://github.com/OWNER/apos/pulls)
+- [Documentation](./README.md)

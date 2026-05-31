@@ -1,23 +1,6 @@
 import crypto from 'crypto';
-import { getExtProxyStore, type ExtProxyProvider } from './ext-proxy-store';
 
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36';
-
-/**
- * 通过浏览器扩展代理执行 LLM 请求。
- * 扩展在真实 Chrome 环境里发请求，完全绕过 Cloudflare/Arkose 检测。
- */
-async function askViaExtension(provider: ExtProxyProvider, prompt: string, cookies: string): Promise<string> {
-  const store = getExtProxyStore();
-  if (!store.isExtensionOnline()) {
-    throw new Error('EXTENSION_OFFLINE');
-  }
-  const result = await store.dispatch(provider, prompt, cookies);
-  if (result.error) {
-    throw new Error(result.error);
-  }
-  return result.text || '';
-}
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 /**
  * Helper: encode a text chunk as an Anthropic SSE content_block_delta event
@@ -31,7 +14,8 @@ function encodeAnthropicDelta(encoder: TextEncoder, text: string): Uint8Array {
 }
 
 /**
- * Helper: write the Anthropic SSE envelope around a stream body.
+ * Helper: write the Anthropic SSE envelope (start events + stop events) around a stream body.
+ * The caller provides an async generator that yields text chunks.
  */
 function buildAnthropicStream(
   chunks: AsyncIterable<string>,
@@ -66,51 +50,28 @@ function buildAnthropicStream(
       enqueue(encoder.encode(`event: message_stop\ndata: ${JSON.stringify({ type: 'message_stop' })}\n\n`));
       try { controller.close(); } catch { /* already closed */ }
     },
-    cancel() {},
+    cancel() {
+      // Client disconnected — nothing to clean up here, generators handle their own cleanup
+    },
   });
 }
 
 /**
- * Build common headers for ChatGPT requests.
- * Extracts oai-did from cookies if present.
+ * Call the ChatGPT Web API using session cookies.
+ * Retrieves an access token from the session endpoint and then calls the conversation backend.
  */
-function buildChatGPTHeaders(cookies: string, accessToken?: string) {
-  const oaiDidMatch = cookies.match(/oai-did=([^;]+)/);
-  const deviceId = oaiDidMatch ? oaiDidMatch[1] : crypto.randomUUID();
-
-  const base: Record<string, string> = {
-    'Cookie': cookies,
-    'User-Agent': USER_AGENT,
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Origin': 'https://chatgpt.com',
-    'Referer': 'https://chatgpt.com/',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-Ch-Ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"macOS"',
-    'Oai-Device-Id': deviceId,
-    'Oai-Language': 'en-US',
-    'Oai-Client-Build-Number': '7022011',
-    'Oai-Client-Version': 'prod-938b17ddad47af377f3f6c1fa84ec33e3379c73d',
-  };
-
-  if (accessToken) {
-    base['Authorization'] = `Bearer ${accessToken}`;
+export async function askChatGPTWeb(prompt: string, cookies: string): Promise<string> {
+  if (!cookies) {
+    throw new Error('ChatGPT Cookies are empty or not configured.');
   }
 
-  return base;
-}
-
-/**
- * Get ChatGPT access token from session endpoint.
- */
-async function getChatGPTAccessToken(cookies: string): Promise<string> {
-  const sessionRes = await fetch('https://chatgpt.com/api/auth/session', {
+  // 1. Fetch Session Token
+  const sessionUrl = 'https://chatgpt.com/api/auth/session';
+  const sessionRes = await fetch(sessionUrl, {
     method: 'GET',
     headers: {
-      ...buildChatGPTHeaders(cookies),
+      'Cookie': cookies,
+      'User-Agent': USER_AGENT,
       'Accept': 'application/json',
     },
   });
@@ -120,119 +81,20 @@ async function getChatGPTAccessToken(cookies: string): Promise<string> {
     throw new Error(`Failed to fetch ChatGPT session token (Status ${sessionRes.status}): ${errText || sessionRes.statusText}`);
   }
 
-  const sessionData = await sessionRes.json();
+  let sessionData: any;
+  try {
+    sessionData = await sessionRes.json();
+  } catch (err: any) {
+    throw new Error(`Failed to parse ChatGPT session response as JSON: ${err.message}`);
+  }
+
   const accessToken = sessionData?.accessToken;
   if (!accessToken) {
     throw new Error('Could not find accessToken in ChatGPT session. Your ChatGPT cookies may have expired.');
   }
-  return accessToken;
-}
 
-/**
- * Solve ChatGPT proof-of-work challenge.
- * ChatGPT requires a SHA-3 (or SHA-256) PoW to be solved before sending messages.
- * The challenge format: find a seed such that sha3_512(seed + message) starts with `difficulty` zeros.
- */
-async function solveProofOfWork(seed: string, difficulty: number): Promise<string> {
-  // ChatGPT uses a simple counter-based PoW: find N such that
-  // hex(sha3_512(seed + N)) starts with `difficulty` zero characters.
-  // We use Node's crypto module with SHA-512 as a fallback since sha3 may not be available.
-  const target = '0'.repeat(difficulty);
-  let counter = 0;
-  const maxAttempts = 500_000;
-
-  while (counter < maxAttempts) {
-    const attempt = `${seed}${counter}`;
-    const hash = crypto.createHash('sha3-512').update(attempt).digest('hex');
-    if (hash.startsWith(target)) {
-      return String(counter);
-    }
-    counter++;
-  }
-  // If we can't solve it (very high difficulty), return empty string
-  // The request may still work without it in some cases
-  console.warn(`[ChatGPT Web] Could not solve PoW challenge (difficulty=${difficulty}) within ${maxAttempts} attempts`);
-  return '';
-}
-
-/**
- * Get ChatGPT sentinel chat requirements token, including solving PoW if required.
- */
-async function getChatGPTSentinelToken(
-  cookies: string,
-  accessToken: string,
-): Promise<{ token: string; powToken?: string } | undefined> {
-  try {
-    const requirementsRes = await fetch('https://chatgpt.com/backend-api/sentinel/chat-requirements', {
-      method: 'POST',
-      headers: {
-        ...buildChatGPTHeaders(cookies, accessToken),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    });
-    if (!requirementsRes.ok) {
-      console.warn(`[ChatGPT Web] sentinel/chat-requirements returned ${requirementsRes.status}`);
-      return undefined;
-    }
-    const reqData = await requirementsRes.json();
-    const token = reqData?.token;
-    if (!token) return undefined;
-
-    // Check for proof-of-work challenge
-    const pow = reqData?.proofofwork;
-    if (pow?.required) {
-      console.log(`[ChatGPT Web] PoW challenge required (difficulty=${pow.difficulty}), solving...`);
-      const powAnswer = await solveProofOfWork(pow.seed, pow.difficulty);
-      console.log(`[ChatGPT Web] PoW solved: counter=${powAnswer}`);
-      // Encode the PoW answer as base64: "gAAAAAB" + base64(seed + ":" + answer)
-      const powToken = powAnswer
-        ? Buffer.from(`${pow.seed}:${powAnswer}`).toString('base64')
-        : undefined;
-      return { token, powToken };
-    }
-
-    return { token };
-  } catch (e) {
-    console.warn('[ChatGPT Web] Failed to get chat requirements:', e);
-  }
-  return undefined;
-}
-
-/**
- * Call the ChatGPT Web API.
- * Prefers the browser extension proxy (bypasses Cloudflare detection).
- * Falls back to direct server-side request if extension is offline.
- */
-export async function askChatGPTWeb(prompt: string, cookies: string): Promise<string> {
-  if (!cookies) {
-    throw new Error('ChatGPT Cookies are empty or not configured.');
-  }
-
-  // Try extension proxy first
-  try {
-    const text = await askViaExtension('chatgpt', prompt, cookies);
-    console.log('[ChatGPT Web] Response via extension proxy');
-    return text;
-  } catch (err: any) {
-    if (err.message !== 'EXTENSION_OFFLINE') {
-      // Extension is online but returned an error — surface it directly
-      throw err;
-    }
-    console.log('[ChatGPT Web] Extension offline, falling back to direct request...');
-  }
-
-  // Fallback: direct server-side request
-  const accessToken = await getChatGPTAccessToken(cookies);
-  console.log('[ChatGPT Web] Access token obtained:', accessToken.substring(0, 20) + '...');
-
-  console.log('[ChatGPT Web] Step 2: Getting sentinel token...');
-  const sentinelResult = await getChatGPTSentinelToken(cookies, accessToken);
-  const chatToken = sentinelResult?.token;
-  const powToken = sentinelResult?.powToken;
-  console.log('[ChatGPT Web] Sentinel token:', chatToken ? 'obtained' : 'not available');
-  if (powToken) console.log('[ChatGPT Web] PoW token: obtained');
-
+  // 2. Call backend-api/conversation
+  const conversationUrl = 'https://chatgpt.com/backend-api/conversation';
   const messageId = crypto.randomUUID();
   const parentMessageId = crypto.randomUUID();
 
@@ -242,57 +104,33 @@ export async function askChatGPTWeb(prompt: string, cookies: string): Promise<st
       {
         id: messageId,
         author: { role: 'user' },
-        create_time: Date.now() / 1000,
-        content: { content_type: 'text', parts: [prompt] },
+        content: {
+          content_type: 'text',
+          parts: [prompt],
+        },
         metadata: {},
       },
     ],
     parent_message_id: parentMessageId,
     model: 'auto',
     timezone_offset_min: -480,
-    timezone: 'Asia/Shanghai',
-    conversation_mode: { kind: 'primary_assistant' },
-    enable_message_followups: true,
-    system_hints: [],
-    supports_buffering: true,
-    supported_encodings: ['v1'],
-    client_contextual_info: {
-      is_dark_mode: false,
-      time_since_loaded: 300,
-      page_height: 734,
-      page_width: 275,
-      pixel_ratio: 1,
-      screen_height: 1080,
-      screen_width: 1920,
-      app_name: 'chatgpt.com',
-    },
-    history_and_training_disabled: true,
+    history_and_training_disabled: true, // Don't save to history to keep account clean
   };
 
-  const conversationHeaders: Record<string, string> = {
-    ...buildChatGPTHeaders(cookies, accessToken),
-    'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
-  };
-
-  if (chatToken) {
-    conversationHeaders['Openai-Sentinel-Chat-Requirements-Token'] = chatToken;
-  }
-  if (powToken) {
-    conversationHeaders['Openai-Sentinel-Proof-Token'] = powToken;
-  }
-
-  const conversationRes = await fetch('https://chatgpt.com/backend-api/f/conversation', {
+  const conversationRes = await fetch(conversationUrl, {
     method: 'POST',
-    headers: conversationHeaders,
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Cookie': cookies,
+      'User-Agent': USER_AGENT,
+      'Accept': 'text/event-stream',
+    },
     body: JSON.stringify(payload),
   });
 
-  console.log('[ChatGPT Web] Conversation response status:', conversationRes.status);
-
   if (!conversationRes.ok) {
     const errText = await conversationRes.text();
-    console.error('[ChatGPT Web] Conversation error response:', errText);
     throw new Error(`ChatGPT conversation API returned error (Status ${conversationRes.status}): ${errText || conversationRes.statusText}`);
   }
 
@@ -319,6 +157,7 @@ export async function askChatGPTWeb(prompt: string, cookies: string): Promise<st
   }
 
   if (!finalText) {
+    // Check if the response was an error message in JSON format instead of SSE
     if (text.trim().startsWith('{')) {
       try {
         const parsedErr = JSON.parse(text);
@@ -335,54 +174,48 @@ export async function askChatGPTWeb(prompt: string, cookies: string): Promise<st
 
 /**
  * Stream ChatGPT Web response as an Anthropic-compatible SSE ReadableStream.
- * Uses the new /backend-api/f/conversation endpoint with sentinel tokens.
+ * The underlying ChatGPT backend-api/conversation endpoint is already SSE,
+ * so we pipe it directly instead of buffering the full response.
  */
 export async function streamChatGPTWeb(prompt: string, cookies: string): Promise<ReadableStream> {
   if (!cookies) throw new Error('ChatGPT Cookies are empty or not configured.');
 
-  const accessToken = await getChatGPTAccessToken(cookies);
-  const sentinelResult = await getChatGPTSentinelToken(cookies, accessToken);
-  const chatToken = sentinelResult?.token;
-  const powToken = sentinelResult?.powToken;
+  // 1. Fetch session token
+  const sessionRes = await fetch('https://chatgpt.com/api/auth/session', {
+    headers: { Cookie: cookies, 'User-Agent': USER_AGENT, Accept: 'application/json' },
+  });
+  if (!sessionRes.ok) throw new Error(`Failed to fetch ChatGPT session (${sessionRes.status})`);
+  const sessionData = await sessionRes.json();
+  const accessToken = sessionData?.accessToken;
+  if (!accessToken) throw new Error('Could not find accessToken in ChatGPT session. Cookies may have expired.');
 
-  const conversationHeaders: Record<string, string> = {
-    ...buildChatGPTHeaders(cookies, accessToken),
-    'Content-Type': 'application/json',
-    Accept: 'text/event-stream',
-  };
-  if (chatToken) {
-    conversationHeaders['Openai-Sentinel-Chat-Requirements-Token'] = chatToken;
-  }
-  if (powToken) {
-    conversationHeaders['Openai-Sentinel-Proof-Token'] = powToken;
-  }
-
-  const conversationRes = await fetch('https://chatgpt.com/backend-api/f/conversation', {
+  // 2. Open streaming conversation
+  const conversationRes = await fetch('https://chatgpt.com/backend-api/conversation', {
     method: 'POST',
-    headers: conversationHeaders,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Cookie: cookies,
+      'User-Agent': USER_AGENT,
+      Accept: 'text/event-stream',
+    },
     body: JSON.stringify({
       action: 'next',
       messages: [{
         id: crypto.randomUUID(),
         author: { role: 'user' },
-        create_time: Date.now() / 1000,
         content: { content_type: 'text', parts: [prompt] },
         metadata: {},
       }],
       parent_message_id: crypto.randomUUID(),
       model: 'auto',
       timezone_offset_min: -480,
-      timezone: 'Asia/Shanghai',
-      conversation_mode: { kind: 'primary_assistant' },
-      system_hints: [],
-      supports_buffering: true,
-      supported_encodings: ['v1'],
-      client_contextual_info: { app_name: 'chatgpt.com' },
       history_and_training_disabled: true,
     }),
   });
   if (!conversationRes.ok) throw new Error(`ChatGPT conversation API error (${conversationRes.status})`);
 
+  // 3. Pipe SSE stream, extracting incremental text deltas
   async function* parseChunks(): AsyncIterable<string> {
     const reader = conversationRes.body!.getReader();
     const decoder = new TextDecoder();
@@ -406,6 +239,7 @@ export async function streamChatGPTWeb(prompt: string, cookies: string): Promise
           const parts = parsed.message?.content?.parts;
           if (parts?.length > 0 && typeof parts[0] === 'string') {
             const current = parts[0];
+            // ChatGPT sends cumulative text — yield only the new delta
             if (current.length > lastParts.length) {
               yield current.slice(lastParts.length);
               lastParts = current;
@@ -420,28 +254,17 @@ export async function streamChatGPTWeb(prompt: string, cookies: string): Promise
 }
 
 /**
- * Call the Gemini Web API.
- * Prefers the browser extension proxy. Falls back to direct request.
+ * Call the Gemini Web API using session cookies.
+ * Fetches the gemini.google.com page to extract the anti-CSRF token (SNlM0e) and then calls batchexecute.
  */
 export async function askGeminiWeb(prompt: string, cookies: string): Promise<string> {
   if (!cookies) {
     throw new Error('Gemini Cookies are empty or not configured.');
   }
 
-  // Try extension proxy first
-  try {
-    const text = await askViaExtension('gemini', prompt, cookies);
-    console.log('[Gemini Web] Response via extension proxy');
-    return text;
-  } catch (err: any) {
-    if (err.message !== 'EXTENSION_OFFLINE') {
-      throw err;
-    }
-    console.log('[Gemini Web] Extension offline, falling back to direct request...');
-  }
-
-  // Fallback: direct server-side request
-  const appRes = await fetch('https://gemini.google.com/app', {
+  // 1. Fetch SNlM0e token
+  const appUrl = 'https://gemini.google.com/app';
+  const appRes = await fetch(appUrl, {
     method: 'GET',
     headers: {
       'Cookie': cookies,
@@ -462,7 +285,10 @@ export async function askGeminiWeb(prompt: string, cookies: string): Promise<str
     throw new Error('Could not extract SNlM0e token from Gemini page. Your Gemini cookies may be invalid or expired.');
   }
 
+  // 2. Call batchexecute
   const executeUrl = 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=XqA3Ic&rt=c';
+  
+  // Format f.req: [[["XqA3Ic", JSON.stringify([null, prompt, "zh-CN", null, 2])]]]
   const innerPayload = JSON.stringify([null, prompt, 'zh-CN', null, 2]);
   const fReq = JSON.stringify([[['XqA3Ic', innerPayload, null, 'generic']]]);
 
@@ -515,6 +341,7 @@ export async function askGeminiWeb(prompt: string, cookies: string): Promise<str
 
 /**
  * Safely extracts the text response from the Gemini JSON structure.
+ * Supports multiple nested formats and falls back to a recursive search for the longest string.
  */
 function extractGeminiText(innerData: any, prompt: string): string {
   try {
@@ -524,6 +351,7 @@ function extractGeminiText(innerData: any, prompt: string): string {
     }
   } catch (e) {}
 
+  // Recursive fallback: search for the longest string in the JSON structure, excluding the prompt itself.
   let longestString = '';
   function search(obj: any) {
     if (typeof obj === 'string') {
@@ -537,10 +365,14 @@ function extractGeminiText(innerData: any, prompt: string): string {
         longestString = trimmed;
       }
     } else if (Array.isArray(obj)) {
-      for (const item of obj) search(item);
+      for (const item of obj) {
+        search(item);
+      }
     } else if (obj && typeof obj === 'object') {
       for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) search(obj[key]);
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          search(obj[key]);
+        }
       }
     }
   }
@@ -549,35 +381,24 @@ function extractGeminiText(innerData: any, prompt: string): string {
 }
 
 /**
- * Call the Kimi Web API.
- * Prefers the browser extension proxy. Falls back to direct request.
+ * Call the Kimi Web API using session cookies.
+ * Exchanges the session cookies for a temporary access token, creates a chat,
+ * posts the prompt to completion/stream, and parses the SSE events.
+ * Finally cleans up the created chat session.
  */
 export async function askKimiWeb(prompt: string, cookies: string): Promise<string> {
   if (!cookies) {
     throw new Error('Kimi Cookies are empty or not configured.');
   }
 
-  // Try extension proxy first
-  try {
-    const text = await askViaExtension('kimi', prompt, cookies);
-    console.log('[Kimi Web] Response via extension proxy');
-    return text;
-  } catch (err: any) {
-    if (err.message !== 'EXTENSION_OFFLINE') {
-      throw err;
-    }
-    console.log('[Kimi Web] Extension offline, falling back to direct request...');
-  }
-
-  // Fallback: direct server-side request
-  const tokenRes = await fetch('https://kimi.moonshot.cn/api/auth/token/refresh', {
+  // 1. Fetch access token from auth token endpoint
+  const tokenUrl = 'https://kimi.moonshot.cn/api/auth/token';
+  const tokenRes = await fetch(tokenUrl, {
     method: 'GET',
     headers: {
       'Cookie': cookies,
       'User-Agent': USER_AGENT,
       'Accept': 'application/json',
-      'Referer': 'https://kimi.moonshot.cn/',
-      'Origin': 'https://kimi.moonshot.cn',
     },
   });
 
@@ -586,20 +407,31 @@ export async function askKimiWeb(prompt: string, cookies: string): Promise<strin
     throw new Error(`Failed to refresh Kimi token (Status ${tokenRes.status}): ${errText || tokenRes.statusText}`);
   }
 
-  const tokenData = await tokenRes.json();
+  let tokenData: any;
+  try {
+    tokenData = await tokenRes.json();
+  } catch (err: any) {
+    throw new Error(`Failed to parse Kimi token response as JSON: ${err.message}`);
+  }
+
   const accessToken = tokenData?.access_token;
   if (!accessToken) {
     throw new Error('Could not find access_token in Kimi token response. Your Kimi cookies may have expired.');
   }
 
-  const chatRes = await fetch('https://kimi.moonshot.cn/api/chat', {
+  // 2. Create temporary chat session
+  const chatUrl = 'https://kimi.moonshot.cn/api/chat';
+  const chatRes = await fetch(chatUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'User-Agent': USER_AGENT,
     },
-    body: JSON.stringify({ name: 'APOS Chat', is_example: false }),
+    body: JSON.stringify({
+      name: 'APOS Chat',
+      is_example: false,
+    }),
   });
 
   if (!chatRes.ok) {
@@ -614,7 +446,9 @@ export async function askKimiWeb(prompt: string, cookies: string): Promise<strin
   }
 
   try {
-    const completionRes = await fetch(`https://kimi.moonshot.cn/api/chat/${chatId}/completion/stream`, {
+    // 3. Post prompt to chat completion stream
+    const completionUrl = `https://kimi.moonshot.cn/api/chat/${chatId}/completion/stream`;
+    const completionRes = await fetch(completionUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -623,7 +457,12 @@ export async function askKimiWeb(prompt: string, cookies: string): Promise<strin
         'Accept': 'text/event-stream',
       },
       body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
         use_search: true,
       }),
     });
@@ -650,6 +489,7 @@ export async function askKimiWeb(prompt: string, cookies: string): Promise<strin
 
         try {
           const parsed = JSON.parse(dataStr);
+          // If the event type is 'text' or if it contains a 'text' property
           if (lastEvent === 'text' && typeof parsed.text === 'string') {
             finalText += parsed.text;
           } else if (parsed.event === 'text' && typeof parsed.text === 'string') {
@@ -658,7 +498,10 @@ export async function askKimiWeb(prompt: string, cookies: string): Promise<strin
             finalText += parsed.text;
           }
         } catch (e) {
-          if (lastEvent === 'text') finalText += dataStr;
+          // If data isn't JSON but event is text, treat as raw text chunk
+          if (lastEvent === 'text') {
+            finalText += dataStr;
+          }
         }
       }
     }
@@ -670,6 +513,7 @@ export async function askKimiWeb(prompt: string, cookies: string): Promise<strin
     return finalText;
 
   } finally {
+    // 4. Delete the temporary chat session to keep history clean
     try {
       await fetch(`https://kimi.moonshot.cn/api/chat/${chatId}`, {
         method: 'DELETE',
@@ -686,18 +530,21 @@ export async function askKimiWeb(prompt: string, cookies: string): Promise<strin
 
 /**
  * Stream Kimi Web response as an Anthropic-compatible SSE ReadableStream.
+ * Kimi's completion/stream endpoint is native SSE, so we pipe it directly.
  */
 export async function streamKimiWeb(prompt: string, cookies: string): Promise<ReadableStream> {
   if (!cookies) throw new Error('Kimi Cookies are empty or not configured.');
 
-  const tokenRes = await fetch('https://kimi.moonshot.cn/api/auth/token/refresh', {
-    headers: { Cookie: cookies, 'User-Agent': USER_AGENT, Accept: 'application/json', Referer: 'https://kimi.moonshot.cn/', Origin: 'https://kimi.moonshot.cn' },
+  // 1. Fetch access token
+  const tokenRes = await fetch('https://kimi.moonshot.cn/api/auth/token', {
+    headers: { Cookie: cookies, 'User-Agent': USER_AGENT, Accept: 'application/json' },
   });
   if (!tokenRes.ok) throw new Error(`Failed to refresh Kimi token (${tokenRes.status})`);
   const tokenData = await tokenRes.json();
   const accessToken = tokenData?.access_token;
   if (!accessToken) throw new Error('Could not find access_token in Kimi response. Cookies may have expired.');
 
+  // 2. Create temporary chat session
   const chatRes = await fetch('https://kimi.moonshot.cn/api/chat', {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
@@ -708,6 +555,7 @@ export async function streamKimiWeb(prompt: string, cookies: string): Promise<Re
   const chatId = chatData?.id;
   if (!chatId) throw new Error('Could not find chat ID in Kimi response.');
 
+  // 3. Open streaming completion
   const completionRes = await fetch(`https://kimi.moonshot.cn/api/chat/${chatId}/completion/stream`, {
     method: 'POST',
     headers: {
@@ -720,6 +568,7 @@ export async function streamKimiWeb(prompt: string, cookies: string): Promise<Re
   });
   if (!completionRes.ok) throw new Error(`Kimi completion API error (${completionRes.status})`);
 
+  // 4. Pipe SSE stream, clean up chat session when done
   async function* parseChunks(): AsyncIterable<string> {
     const reader = completionRes.body!.getReader();
     const decoder = new TextDecoder();
@@ -750,6 +599,7 @@ export async function streamKimiWeb(prompt: string, cookies: string): Promise<Re
         }
       }
     } finally {
+      // Clean up chat session
       fetch(`https://kimi.moonshot.cn/api/chat/${chatId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': USER_AGENT },
@@ -759,3 +609,4 @@ export async function streamKimiWeb(prompt: string, cookies: string): Promise<Re
 
   return buildAnthropicStream(parseChunks(), 'kimi-web');
 }
+

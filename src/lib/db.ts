@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Ensure the data directory exists
-const baseDir = process.env.APOS_DIR || /* turbopackIgnore: true */ process.cwd();
+const baseDir = process.env.APOS_DIR || process.cwd();
 const dbDir = path.join(baseDir, 'data');
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });

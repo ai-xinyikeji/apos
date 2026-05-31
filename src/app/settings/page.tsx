@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -69,11 +69,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncingCookies, setSyncingCookies] = useState(false);
-  const isManualSync = useRef(false);
   const [extensionInstalled, setExtensionInstalled] = useState(false);
-  const [cookieExpanded, setCookieExpanded] = useState<{chatgpt: boolean; gemini: boolean; kimi: boolean}>({
-    chatgpt: false, gemini: false, kimi: false
-  });
   const [lmStudioStatus, setLMStudioStatus] = useState<{
     available: boolean;
     models: string[];
@@ -348,50 +344,23 @@ export default function SettingsPage() {
 
     // Detect browser companion extension
     if (typeof document !== 'undefined') {
-      const alreadyInstalled = document.documentElement.getAttribute('data-apos-extension-installed') === 'true';
+      const isInstalled = document.documentElement.getAttribute('data-apos-extension-installed') === 'true';
+      setExtensionInstalled(isInstalled);
 
-      const triggerAutoSync = () => {
-        setSyncingCookies(true);
-        window.dispatchEvent(new CustomEvent('apos-sync-cookies-request'));
-      };
-
-      if (alreadyInstalled) {
-        setExtensionInstalled(true);
-        // Extension already injected before page mounted — auto-sync immediately
-        triggerAutoSync();
-      }
-
-      const handleInstalled = () => {
-        setExtensionInstalled(true);
-        // Extension came online while page was open — auto-sync immediately
-        triggerAutoSync();
-      };
+      const handleInstalled = () => setExtensionInstalled(true);
       window.addEventListener('apos-extension-installed', handleInstalled);
-
-      // Actively probe the extension in case the one-shot 'apos-extension-installed'
-      // event fired before this useEffect registered its listener (race condition).
-      // The content script listens for 'apos-check-extension' and calls markExtensionInstalled().
-      if (!alreadyInstalled) {
-        window.dispatchEvent(new CustomEvent('apos-check-extension'));
-      }
 
       // Listen for cookie sync response
       const handleSyncResponse = (e: Event & { detail?: { success: boolean; error?: string } }) => {
         const detail = e.detail;
         if (detail) {
           if (detail.success) {
-            setMessage({ type: 'success', text: '网页版 Cookies 已自动同步并保存！' });
+            setMessage({ type: 'success', text: '网页版 Cookies 已成功自动同步并保存！' });
             loadSettings();
-          } else if (isManualSync.current) {
-            // 手动点按钮触发的同步失败，显示错误
-            setMessage({ type: 'error', text: `Cookies 同步失败: ${detail.error || '未知错误'}` });
           } else {
-            // 自动同步失败静默处理，用户可手动点按钮重试
-            console.warn('[Settings] Auto cookie sync failed:', detail.error);
-            loadSettings();
+            setMessage({ type: 'error', text: `Cookies 自动同步失败: ${detail.error || '未知错误'}` });
           }
         }
-        isManualSync.current = false;
         setSyncingCookies(false);
       };
       window.addEventListener('apos-sync-cookies-response', handleSyncResponse as EventListener);
@@ -468,7 +437,6 @@ export default function SettingsPage() {
   };
 
   const handleSyncCookies = () => {
-    isManualSync.current = true;
     setSyncingCookies(true);
     setMessage(null);
     window.dispatchEvent(new CustomEvent('apos-sync-cookies-request'));
@@ -946,11 +914,40 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Sync Button */}
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between p-4 rounded-xl border border-slate-700/80 bg-slate-950/40">
-              <div className="text-xs text-slate-350">
-                {extensionInstalled ? '点击按钮同步浏览器中的 Cookie' : '未检测到伴侣插件'}
+              <div className="space-y-1">
+                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5">
+                  ChatGPT Web Cookie: 
+                  {formData.chatgpt_cookies ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
+                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
+                    </span>
+                  ) : (
+                    <span className="text-slate-100">未同步</span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5 mt-1">
+                  Gemini Web Cookie: 
+                  {formData.gemini_cookies ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
+                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
+                    </span>
+                  ) : (
+                    <span className="text-slate-100">未同步</span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5 mt-1">
+                  Kimi Web Cookie: 
+                  {formData.kimi_cookies ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
+                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
+                    </span>
+                  ) : (
+                    <span className="text-slate-100">未同步</span>
+                  )}
+                </div>
               </div>
+
               {extensionInstalled ? (
                 <Button
                   type="button"
@@ -977,140 +974,23 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* ChatGPT Cookie */}
-            <div className="space-y-2 p-4 rounded-xl border border-slate-700/80 bg-slate-950/40">
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5">
-                  ChatGPT Web Cookie: 
-                  {formData.chatgpt_cookies ? (
-                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
-                    </span>
-                  ) : (
-                    <span className="text-slate-100">未同步</span>
-                  )}
-                </div>
+            {/* Manual cookie removal input */}
+            {(formData.chatgpt_cookies || formData.gemini_cookies || formData.kimi_cookies) && (
+              <div className="pt-2 text-right">
                 <button
                   type="button"
-                  onClick={() => setCookieExpanded(prev => ({ ...prev, chatgpt: !prev.chatgpt }))}
-                  className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                  onClick={() => {
+                    handleInputChange('chatgpt_cookies', '');
+                    handleInputChange('gemini_cookies', '');
+                    handleInputChange('kimi_cookies', '');
+                    setMessage({ type: 'success', text: '已清除本地 Cookie 配置，保存后生效。' });
+                  }}
+                  className="text-slate-350 hover:text-rose-400 text-xs transition-colors"
                 >
-                  {cookieExpanded.chatgpt ? '收起' : '查看/编辑'}
+                  清除已同步的 Cookies
                 </button>
               </div>
-              {cookieExpanded.chatgpt && (
-                <div className="space-y-2 pt-2">
-                  <textarea
-                    value={formData.chatgpt_cookies || ''}
-                    onChange={(e) => handleInputChange('chatgpt_cookies', e.target.value)}
-                    placeholder="粘贴 ChatGPT Cookie 或通过插件同步"
-                    className="w-full h-24 px-3 py-2 bg-slate-950/60 border border-slate-700/60 rounded-lg text-xs text-slate-100 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleInputChange('chatgpt_cookies', '');
-                        setMessage({ type: 'success', text: 'ChatGPT Cookie 已清除，保存后生效。' });
-                      }}
-                      className="text-xs text-slate-350 hover:text-rose-400 transition-colors"
-                    >
-                      清除
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Gemini Cookie */}
-            <div className="space-y-2 p-4 rounded-xl border border-slate-700/80 bg-slate-950/40">
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5">
-                  Gemini Web Cookie: 
-                  {formData.gemini_cookies ? (
-                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
-                    </span>
-                  ) : (
-                    <span className="text-slate-100">未同步</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCookieExpanded(prev => ({ ...prev, gemini: !prev.gemini }))}
-                  className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-                >
-                  {cookieExpanded.gemini ? '收起' : '查看/编辑'}
-                </button>
-              </div>
-              {cookieExpanded.gemini && (
-                <div className="space-y-2 pt-2">
-                  <textarea
-                    value={formData.gemini_cookies || ''}
-                    onChange={(e) => handleInputChange('gemini_cookies', e.target.value)}
-                    placeholder="粘贴 Gemini Cookie 或通过插件同步"
-                    className="w-full h-24 px-3 py-2 bg-slate-950/60 border border-slate-700/60 rounded-lg text-xs text-slate-100 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleInputChange('gemini_cookies', '');
-                        setMessage({ type: 'success', text: 'Gemini Cookie 已清除，保存后生效。' });
-                      }}
-                      className="text-xs text-slate-350 hover:text-rose-400 transition-colors"
-                    >
-                      清除
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Kimi Cookie */}
-            <div className="space-y-2 p-4 rounded-xl border border-slate-700/80 bg-slate-950/40">
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5">
-                  Kimi Web Cookie: 
-                  {formData.kimi_cookies ? (
-                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
-                    </span>
-                  ) : (
-                    <span className="text-slate-100">未同步</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCookieExpanded(prev => ({ ...prev, kimi: !prev.kimi }))}
-                  className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-                >
-                  {cookieExpanded.kimi ? '收起' : '查看/编辑'}
-                </button>
-              </div>
-              {cookieExpanded.kimi && (
-                <div className="space-y-2 pt-2">
-                  <textarea
-                    value={formData.kimi_cookies || ''}
-                    onChange={(e) => handleInputChange('kimi_cookies', e.target.value)}
-                    placeholder="粘贴 Kimi Cookie 或通过插件同步"
-                    className="w-full h-24 px-3 py-2 bg-slate-950/60 border border-slate-700/60 rounded-lg text-xs text-slate-100 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleInputChange('kimi_cookies', '');
-                        setMessage({ type: 'success', text: 'Kimi Cookie 已清除，保存后生效。' });
-                      }}
-                      className="text-xs text-slate-350 hover:text-rose-400 transition-colors"
-                    >
-                      清除
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
           </CardContent>
         </Card>
 

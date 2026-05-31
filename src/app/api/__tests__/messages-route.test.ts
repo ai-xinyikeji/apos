@@ -14,31 +14,6 @@ import { streamText } from 'ai';
 jest.mock('@/lib/llm');
 jest.mock('ai');
 
-// Mock EnhancedRoutingSystem with a factory that returns a classifying mock
-jest.mock('@/lib/routing/enhanced-routing-system', () => {
-  return {
-    EnhancedRoutingSystem: jest.fn().mockImplementation(() => ({
-      route: jest.fn().mockImplementation(async ({ prompt }: { prompt: string }) => {
-        const lowerPrompt = prompt.toLowerCase();
-        let taskType = 'summarize';
-        if (
-          lowerPrompt.includes('write code') ||
-          lowerPrompt.includes('implement') ||
-          lowerPrompt.includes('debug') ||
-          lowerPrompt.includes('fix bug')
-        ) {
-          taskType = 'coding';
-        }
-        return {
-          taskType,
-          selection: { provider: 'openai', modelName: 'gpt-4o' },
-          routingTimeMs: 10,
-        };
-      }),
-    })),
-  };
-});
-
 describe('Messages Route Proxy API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -60,7 +35,7 @@ describe('Messages Route Proxy API', () => {
 
     const mockReq = makeMockRequest({
       messages: [
-        { role: 'user', content: 'Write code to implement a user authentication API endpoint' }
+        { role: 'user', content: 'Please write a login page component in React' }
       ],
       stream: true
     });
@@ -116,7 +91,7 @@ describe('Messages Route Proxy API', () => {
             {
               type: 'tool_result',
               tool_use_id: 'tool_1',
-              content: 'Debug this code: fix bug in authentication module at line 42'
+              content: 'Failed to compile. Error: Type mismatch at line 42'
             }
           ]
         }
@@ -126,6 +101,6 @@ describe('Messages Route Proxy API', () => {
 
     const response = await POST(mockReq);
     expect(response.status).toBe(200);
-    expect(routeModel).toHaveBeenCalledWith('coding'); // because of "Debug" and "fix bug" -> coding heuristics
+    expect(routeModel).toHaveBeenCalledWith('coding'); // because of "Failed to compile", "Error" -> coding/fix heuristics
   });
 });

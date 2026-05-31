@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "APOS Extension",
-  "version": "1.1.0",
-  "description": "AI Product OS 浏览器伴侣 - 自动同步 ChatGPT 和 Gemini 的 Session Cookies 到本地 APOS，并代理 LLM 请求以绕过反爬检测",
+  "version": "1.0.0",
+  "description": "AI Product OS 浏览器伴侣 - 自动同步 ChatGPT 和 Gemini 的 Session Cookies 到本地 APOS",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -29,8 +29,6 @@
     "https://gemini.google.com/*",
     "https://*.moonshot.cn/*",
     "https://kimi.moonshot.cn/*",
-    "https://kimi.com/*",
-    "https://www.kimi.com/*",
     "http://localhost:3000/*"
   ],
   "background": {
@@ -38,31 +36,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://localhost:3000/*"],
+      "matches": ["http://localhost:3000/settings"],
       "js": ["content.js"],
       "run_at": "document_end"
-    },
-    {
-      "matches": [
-        "https://chatgpt.com/*",
-        "https://*.chatgpt.com/*"
-      ],
-      "js": ["llm-content.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://gemini.google.com/*"
-      ],
-      "js": ["llm-content.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://kimi.moonshot.cn/*"
-      ],
-      "js": ["llm-content.js"],
-      "run_at": "document_idle"
     }
   ]
 }

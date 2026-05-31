@@ -268,7 +268,7 @@ export function deleteClaudeMd(projectPath: string): { success: boolean; message
 /**
  * 根据数据库中持久化的目标项目路径，自动重新生成并热更新 CLAUDE.md
  */
-export async function updateClaudeMdIfConfigured(aposDir: string = /* turbopackIgnore: true */ process.cwd()) {
+export async function updateClaudeMdIfConfigured(aposDir: string = process.cwd()) {
   try {
     const { db } = await import('@/lib/db');
     const { settings } = await import('@/lib/schema');

@@ -1,6 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ─── Dependencies ─────────────────────────────────────────────────────────────
 /node_modules
 /.pnp
 .pnp.*
@@ -10,32 +10,64 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
+# ─── Next.js ──────────────────────────────────────────────────────────────────
 /.next/
 /out/
-
-# production
 /build
 
-# misc
-.DS_Store
-*.pem
+# ─── Testing ──────────────────────────────────────────────────────────────────
+/coverage
 
-# debug
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# Keep .env.example (it's a template, safe to commit)
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+# SQLite database files (contain user data, API keys, cookies)
+data/apos.db
+data/apos.db-shm
+data/apos.db-wal
+# Vector DB (large binary files, auto-generated)
+data/vectordb/
+data/vectordb_test/
+# Reports (generated output)
+data/reports/
+# Keep data/.gitkeep so the data/ directory is tracked
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# ─── TypeScript ───────────────────────────────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
+
+# ─── OS & Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+.vscode/settings.json
+.vscode/launch.json
+# Keep .vscode/extensions.json (useful for team)
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.pem
 .vercel
+/scratch/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ─── SWC cache ────────────────────────────────────────────────────────────────
+.swc/

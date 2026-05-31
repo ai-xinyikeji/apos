@@ -98,69 +98,44 @@ export async function routeModel(taskType: TaskType = 'default'): Promise<LLMCon
           provider: 'ollama',
         };
       }
-      // Ollama not available, fall through to other options
     }
-    if (selectedModel === 'chatgpt_web') {
-      if (!chatgptCookies) {
-        throw new Error('ChatGPT 网页版未配置 Cookie。请在设置页面同步浏览器 Cookie。');
-      }
+    if (selectedModel === 'chatgpt_web' && chatgptCookies) {
       return {
         model: { isWebModel: true, type: 'chatgpt', cookies: chatgptCookies },
         provider: 'web',
       };
     }
-    if (selectedModel === 'gemini_web') {
-      if (!geminiCookies) {
-        throw new Error('Gemini 网页版未配置 Cookie。请在设置页面同步浏览器 Cookie。');
-      }
+    if (selectedModel === 'gemini_web' && geminiCookies) {
       return {
         model: { isWebModel: true, type: 'gemini', cookies: geminiCookies },
         provider: 'web',
       };
     }
-    if (selectedModel === 'kimi_web') {
-      if (!kimiCookies) {
-        throw new Error('Kimi 网页版未配置 Cookie。请在设置页面同步浏览器 Cookie。');
-      }
+    if (selectedModel === 'kimi_web' && kimiCookies) {
       return {
         model: { isWebModel: true, type: 'kimi', cookies: kimiCookies },
         provider: 'web',
       };
     }
-    if (selectedModel === 'anthropic_api') {
-      if (!anthropicKey) {
-        throw new Error('Anthropic API 未配置密钥。请在设置页面配置 API Key。');
-      }
+    if (selectedModel === 'anthropic_api' && anthropicKey) {
       const anthropic = createAnthropic({ apiKey: anthropicKey });
       const claudeModel = selectClaudeModel(taskType);
       return { model: anthropic(claudeModel), provider: 'anthropic' };
     }
-    if (selectedModel === 'openai_api') {
-      if (!openaiKey) {
-        throw new Error('OpenAI API 未配置密钥。请在设置页面配置 API Key。');
-      }
+    if (selectedModel === 'openai_api' && openaiKey) {
       const openai = createOpenAI({ apiKey: openaiKey });
       return { model: openai('gpt-4o'), provider: 'openai' };
     }
-    if (selectedModel === 'google_api') {
-      if (!googleKey) {
-        throw new Error('Google API 未配置密钥。请在设置页面配置 API Key。');
-      }
+    if (selectedModel === 'google_api' && googleKey) {
       const google = createGoogleGenerativeAI({ apiKey: googleKey });
       return { model: google('gemini-1.5-pro-latest'), provider: 'google' };
     }
-    if (selectedModel === 'deepseek_api') {
-      if (!deepseekKey) {
-        throw new Error('DeepSeek API 未配置密钥。请在设置页面配置 API Key。');
-      }
+    if (selectedModel === 'deepseek_api' && deepseekKey) {
       const ds = createOpenAI({ baseURL: 'https://api.deepseek.com/v1', apiKey: deepseekKey });
       const modelName = (taskType === 'reasoning' || taskType === 'explain') ? 'deepseek-reasoner' : 'deepseek-chat';
       return { model: ds(modelName), provider: 'openai' };
     }
-    if (selectedModel === 'custom_openai_api') {
-      if (!customKey || !customBase) {
-        throw new Error('自定义 OpenAI API 未完整配置。请在设置页面配置 API Key 和 Base URL。');
-      }
+    if (selectedModel === 'custom_openai_api' && customKey && customBase) {
       const custom = createOpenAI({ baseURL: customBase, apiKey: customKey });
       return { model: custom(customModel || 'gpt-4o'), provider: 'openai' };
     }
@@ -192,14 +167,7 @@ export async function generateText(options: any): Promise<any> {
 
     if (options.messages && Array.isArray(options.messages)) {
       prompt = options.messages
-        .map((m: any) => {
-          const content = typeof m.content === 'string'
-            ? m.content
-            : Array.isArray(m.content)
-              ? m.content.map((c: any) => c.text || c.content || '').join('')
-              : '';
-          return `${m.role === 'user' ? 'User' : 'Assistant'}: ${content}`;
-        })
+        .map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
         .join('\n\n');
     }
 

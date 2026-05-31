@@ -448,8 +448,8 @@ describe('GET /api/compression/compress', () => {
   });
 
   it('should return compression system status', async () => {
-    const { isOllamaAvailable } = await import('@/lib/llm');
-    const mockIsAvailable = isOllamaAvailable as jest.MockedFunction<typeof isOllamaAvailable>;
+    const { isLMStudioAvailable } = await import('@/lib/llm');
+    const mockIsAvailable = isLMStudioAvailable as jest.MockedFunction<typeof isLMStudioAvailable>;
     mockIsAvailable.mockResolvedValue(true);
 
     const response = await GET();
@@ -458,23 +458,23 @@ describe('GET /api/compression/compress', () => {
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.status).toEqual({
-      ollamaAvailable: true,
+      lmStudioAvailable: true,
       supportedModes: ['messages', 'file', 'files', 'smart'],
       supportedLevels: ['light', 'medium', 'aggressive'],
       compressionMethods: ['ast', 'llm', 'hybrid'],
     });
   });
 
-  it('should handle Ollama unavailable', async () => {
-    const { isOllamaAvailable } = await import('@/lib/llm');
-    const mockIsAvailable = isOllamaAvailable as jest.MockedFunction<typeof isOllamaAvailable>;
+  it('should handle LM Studio unavailable', async () => {
+    const { isLMStudioAvailable } = await import('@/lib/llm');
+    const mockIsAvailable = isLMStudioAvailable as jest.MockedFunction<typeof isLMStudioAvailable>;
     mockIsAvailable.mockResolvedValue(false);
 
     const response = await GET();
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.status.ollamaAvailable).toBe(false);
+    expect(data.status.lmStudioAvailable).toBe(false);
   });
 
   it('should return 500 when status check fails', async () => {

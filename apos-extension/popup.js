@@ -13,8 +13,6 @@ const kimiCount = document.getElementById('kimiCount');
 const syncBtn = document.getElementById('syncBtn');
 const refreshBtn = document.getElementById('refreshBtn');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
-const toggleAutoSyncBtn = document.getElementById('toggleAutoSyncBtn');
-const autoSyncStatus = document.getElementById('autoSyncStatus');
 const messageEl = document.getElementById('message');
 
 // State
@@ -23,8 +21,6 @@ let cookiesData = {
   gemini: [],
   kimi: []
 };
-let autoSyncEnabled = true;
-let syncIntervalMinutes = 5;
 
 // Show message
 function showMessage(text, type = 'info') {
@@ -175,19 +171,17 @@ async function syncCookies() {
       .map(c => `${c.name}=${c.value}`)
       .join('; ');
 
-    // Send to APOS server — only include providers that actually have cookies.
-    // Sending an empty string would cause the server to DELETE stored cookies.
-    const payload = {};
-    if (chatgptCookieStr) payload.chatgpt_cookies = chatgptCookieStr;
-    if (geminiCookieStr)  payload.gemini_cookies  = geminiCookieStr;
-    if (kimiCookieStr)    payload.kimi_cookies    = kimiCookieStr;
-
+    // Send to APOS server
     const syncResponse = await fetch(`${APOS_SERVER_URL}/api/settings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        chatgpt_cookies: chatgptCookieStr,
+        gemini_cookies: geminiCookieStr,
+        kimi_cookies: kimiCookieStr
+      })
     });
 
     if (!syncResponse.ok) {
@@ -210,62 +204,10 @@ function openSettings() {
   chrome.tabs.create({ url: `${APOS_SERVER_URL}/settings` });
 }
 
-// Update auto-sync status display
-async function updateAutoSyncStatus() {
-  try {
-    const result = await chrome.storage.sync.get(['autoSync', 'syncInterval']);
-    autoSyncEnabled = result.autoSync !== undefined ? result.autoSync : true;
-    syncIntervalMinutes = result.syncInterval || 5;
-
-    if (autoSyncEnabled) {
-      autoSyncStatus.textContent = `已启用 (每 ${syncIntervalMinutes} 分钟)`;
-      autoSyncStatus.className = 'status-value status-connected';
-      toggleAutoSyncBtn.textContent = '禁用自动同步';
-    } else {
-      autoSyncStatus.textContent = '已禁用';
-      autoSyncStatus.className = 'status-value status-warning';
-      toggleAutoSyncBtn.textContent = '启用自动同步';
-    }
-  } catch (error) {
-    console.error('Failed to load auto-sync status:', error);
-  }
-}
-
-// Toggle auto-sync
-async function toggleAutoSync() {
-  try {
-    const newState = !autoSyncEnabled;
-    
-    // Send message to background script
-    chrome.runtime.sendMessage({ 
-      action: 'toggle_auto_sync', 
-      enabled: newState 
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        showMessage(`切换失败: ${chrome.runtime.lastError.message}`, 'error');
-        return;
-      }
-      
-      if (response && response.success) {
-        autoSyncEnabled = newState;
-        updateAutoSyncStatus();
-        showMessage(newState ? '自动同步已启用' : '自动同步已禁用', 'success');
-      } else {
-        showMessage(`切换失败: ${response?.error || '未知错误'}`, 'error');
-      }
-    });
-  } catch (error) {
-    console.error('Toggle auto-sync failed:', error);
-    showMessage(`切换失败: ${error.message}`, 'error');
-  }
-}
-
 // Event listeners
 syncBtn.addEventListener('click', syncCookies);
 refreshBtn.addEventListener('click', refresh);
 openSettingsBtn.addEventListener('click', openSettings);
-toggleAutoSyncBtn.addEventListener('click', toggleAutoSync);
 
 // Initialize on load
 refresh();
-updateAutoSyncStatus();

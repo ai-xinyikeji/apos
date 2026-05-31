@@ -13,7 +13,7 @@ export async function GET() {
     const allSignals = await db.select().from(signals).orderBy(desc(signals.createdAt));
     
     // 2. Scan data/reports folder for Markdown weekly reports
-    const reportsDir = path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'reports');
+    const reportsDir = path.join(process.cwd(), 'data', 'reports');
     let reportsList: any[] = [];
     
     if (fs.existsSync(reportsDir)) {

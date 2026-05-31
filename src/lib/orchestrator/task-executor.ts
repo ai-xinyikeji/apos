@@ -169,7 +169,7 @@ export class TaskExecutor {
     
     const { stdout, stderr } = await execAsync(task.command, {
       timeout: this.options.timeout,
-      cwd: /* turbopackIgnore: true */ process.cwd(),
+      cwd: process.cwd(),
     });
     
     return { stdout, stderr };

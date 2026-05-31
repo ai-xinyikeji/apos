@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     
     const absolutePath = path.isAbsolute(filePath) 
       ? filePath 
-      : path.join(/* turbopackIgnore: true */ process.cwd(), filePath);
+      : path.join(process.cwd(), filePath);
       
     if (!fs.existsSync(absolutePath)) {
       return NextResponse.json(
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Code optimized and applied successfully. Original file backed up.',
-      backupFile: path.relative(/* turbopackIgnore: true */ process.cwd(), backupPath),
+      backupFile: path.relative(process.cwd(), backupPath),
     });
   } catch (error: any) {
     return NextResponse.json(

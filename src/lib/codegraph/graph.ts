@@ -52,7 +52,7 @@ export class GraphQueryManager {
   /**
    * Indexes a single file in the database.
    */
-  async indexFile(filePath: string, workspacePath: string = /* turbopackIgnore: true */ process.cwd()): Promise<void> {
+  async indexFile(filePath: string, workspacePath: string = process.cwd()): Promise<void> {
     const relativePath = path.relative(workspacePath, filePath);
     try {
       const content = fs.readFileSync(filePath, 'utf8');
@@ -123,7 +123,7 @@ export class GraphQueryManager {
     workspacePathOrTraceCallback?: string | ((msg: string) => Promise<void>),
     traceCallback?: (msg: string) => Promise<void>
   ): Promise<number> {
-    let workspacePath = /* turbopackIgnore: true */ process.cwd();
+    let workspacePath = process.cwd();
     let actualTraceCallback = traceCallback;
     
     if (typeof workspacePathOrTraceCallback === 'string') {

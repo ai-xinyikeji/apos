@@ -5,7 +5,6 @@ import { manageContext } from '@/lib/context-manager';
 import { LocalModelOptimizer } from '@/lib/local-model-optimizer';
 import { EnhancedRoutingSystem } from '@/lib/routing/enhanced-routing-system';
 import { CostRecorder } from '@/lib/cost/cost-recorder';
-import { streamChatGPTWeb, streamKimiWeb, askGeminiWeb } from '@/lib/web-llm';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +26,7 @@ export async function POST(req: NextRequest) {
     const promptText = typeof lastUserMessage?.content === 'string'
       ? lastUserMessage.content
       : Array.isArray(lastUserMessage?.content)
-        ? lastUserMessage.content.map((c: any) => c.text || c.content || '').join(' ')
+        ? lastUserMessage.content.map((c: any) => c.text || '').join(' ')
         : '';
 
     // ── Task 14.1: Integrate EnhancedRoutingSystem ────────────────────────────
@@ -48,7 +47,9 @@ export async function POST(req: NextRequest) {
 
     // Fall back to legacy router if enhanced routing failed
     const taskType = routingResult?.taskType ?? 'summarize';
-    const { model, provider } = await routeModel(taskType as any);
+    const { model, provider } = routedProvider
+      ? await routeModel(routedProvider as any)
+      : await routeModel(taskType as any);
 
     console.log(`[APOS LLM Proxy] Routing to provider: ${provider}`);
 
@@ -63,13 +64,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Apply three-layer context management
-    // Web models don't have a modelId property — pass undefined so context-manager uses its default limit
-    const modelId = model?.modelId as string | undefined;
     const contextResult = await manageContext(
       messages || [],
       systemPrompt,
       provider,
-      modelId,
+      model.modelId,
       true  // Enable compression
     );
 
@@ -129,69 +128,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (stream) {
-      // ── Web model streaming: web models are not real AI SDK models,
-      //    so we must route them through the dedicated web streaming functions.
-      if (provider === 'web') {
-        // Build a single prompt string from the processed messages
-        let webPrompt = processedMessages
-          .map((m: any) => {
-            const content = typeof m.content === 'string'
-              ? m.content
-              : Array.isArray(m.content)
-                ? m.content.map((c: any) => c.text || c.content || '').join('')
-                : '';
-            return `${m.role === 'user' ? 'User' : 'Assistant'}: ${content}`;
-          })
-          .join('\n\n');
-
-        if (processedSystem) {
-          webPrompt = `System Instructions:\n${processedSystem}\n\n${webPrompt}`;
-        }
-
-        let webStream: ReadableStream;
-        if (model.type === 'chatgpt') {
-          console.log('[APOS LLM Proxy] Streaming via ChatGPT Web');
-          webStream = await streamChatGPTWeb(webPrompt, model.cookies);
-        } else if (model.type === 'kimi') {
-          console.log('[APOS LLM Proxy] Streaming via Kimi Web');
-          webStream = await streamKimiWeb(webPrompt, model.cookies);
-        } else if (model.type === 'gemini') {
-          // Gemini has no streaming variant — call non-streaming and wrap in SSE
-          console.log('[APOS LLM Proxy] Gemini Web (no stream support, wrapping non-stream response)');
-          const geminiText = await askGeminiWeb(webPrompt, model.cookies);
-          const encoder = new TextEncoder();
-          webStream = new ReadableStream({
-            start(controller) {
-              const enqueue = (data: Uint8Array) => { try { controller.enqueue(data); } catch {} };
-              enqueue(encoder.encode(`event: message_start\ndata: ${JSON.stringify({ type: 'message_start', message: { id: `msg_${Date.now()}`, type: 'message', role: 'assistant', content: [], model: 'gemini-web', stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } })}\n\n`));
-              enqueue(encoder.encode(`event: content_block_start\ndata: ${JSON.stringify({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })}\n\n`));
-              enqueue(encoder.encode(`event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: geminiText } })}\n\n`));
-              enqueue(encoder.encode(`event: content_block_stop\ndata: ${JSON.stringify({ type: 'content_block_stop', index: 0 })}\n\n`));
-              enqueue(encoder.encode(`event: message_delta\ndata: ${JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 0 } })}\n\n`));
-              enqueue(encoder.encode(`event: message_stop\ndata: ${JSON.stringify({ type: 'message_stop' })}\n\n`));
-              try { controller.close(); } catch {}
-            },
-          });
-        } else {
-          throw new Error(`Unsupported web model type for streaming: ${model.type}`);
-        }
-
-        return new Response(webStream, {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            ...(routingResult ? {
-              'X-APOS-Model':       routingResult.selection.modelName,
-              'X-APOS-Provider':    routingResult.selection.provider,
-              'X-APOS-Cost':        String(routingResult.selection.estimatedCost),
-              'X-APOS-Decision-Id': routingResult.decisionId,
-              'X-APOS-Task-Type':   routingResult.taskType,
-            } : {}),
-          },
-        });
-      }
-
       const result = await streamText({
         model,
         messages: processedMessages,

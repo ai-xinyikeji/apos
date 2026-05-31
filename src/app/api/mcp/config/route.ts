@@ -11,7 +11,7 @@ import os from 'os';
 
 // GET /api/mcp/config — 返回配置内容 + 配置路径信息
 export async function GET() {
-  const aposDir = /* turbopackIgnore: true */ process.cwd();
+  const aposDir = process.cwd();
   const config = generateMcpConfig(aposDir);
   const configPaths = getClaudeCodeConfigPaths();
 
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
       
-      const result = writeClaudeCodeConfig(p.path, /* turbopackIgnore: true */ process.cwd());
+      const result = writeClaudeCodeConfig(p.path, process.cwd());
       if (!result.success) {
         success = false;
         messages.push(`${p.label} 写入失败: ${result.message}`);
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
 
   if (action === 'generate_claude_md') {
     // Generate CLAUDE.md for a target project
-    const targetPath = body.targetPath ?? /* turbopackIgnore: true */ process.cwd();
+    const targetPath = body.targetPath ?? process.cwd();
     
     // Save target path to settings database
     try {
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
 
     const result = await writeClaudeMd({
       projectPath: targetPath,
-      aposDir: /* turbopackIgnore: true */ process.cwd(),
+      aposDir: process.cwd(),
       overwrite: body.overwrite ?? false,
       customInstructions: body.customInstructions,
     });
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
 
   if (action === 'delete_claude_md') {
     // Delete CLAUDE.md for a target project
-    const targetPath = body.targetPath ?? /* turbopackIgnore: true */ process.cwd();
+    const targetPath = body.targetPath ?? process.cwd();
     const result = deleteClaudeMd(targetPath);
 
     return NextResponse.json({

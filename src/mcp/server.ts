@@ -22,7 +22,7 @@ import {
 import path from 'path';
 import fs from 'fs';
 
-const APOS_DIR = process.env.APOS_DIR || /* turbopackIgnore: true */ process.cwd();
+const APOS_DIR = process.env.APOS_DIR || process.cwd();
 
 // ─── Tool Handlers (lazy-loaded to avoid heavy deps at startup) ───────────────
 
@@ -350,7 +350,7 @@ async function getTargetPath(argsPath?: string): Promise<string> {
     }
   } catch {}
   
-  return /* turbopackIgnore: true */ process.cwd();
+  return process.cwd();
 }
 
 async function handleIndexWorkspace(args: { path?: string }) {

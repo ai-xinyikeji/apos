@@ -240,7 +240,7 @@ async function getOrUpdateSummary(
 const MEMORY_TABLE = 'conversation_memories_vec';
 
 async function storeMemoryVector(sessionId: string, text: string): Promise<void> {
-  const APOS_DIR = process.env.APOS_DIR || /* turbopackIgnore: true */ process.cwd();
+  const APOS_DIR = process.env.APOS_DIR || process.cwd();
   const DB_DIR = path.join(APOS_DIR, 'data/vectordb');
 
   try {
@@ -271,7 +271,7 @@ async function retrieveRelevantMemories(
   query: string,
   currentSessionId: string,
 ): Promise<string[]> {
-  const APOS_DIR = process.env.APOS_DIR || /* turbopackIgnore: true */ process.cwd();
+  const APOS_DIR = process.env.APOS_DIR || process.cwd();
   const DB_DIR = path.join(APOS_DIR, 'data/vectordb');
 
   if (!fs.existsSync(DB_DIR)) return [];

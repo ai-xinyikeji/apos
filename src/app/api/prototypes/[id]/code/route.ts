@@ -36,7 +36,7 @@ export async function GET(
 
     const files = [];
     for (const filePath of paths) {
-      const fullPath = path.join(/* turbopackIgnore: true */ process.cwd(), filePath);
+      const fullPath = path.join(process.cwd(), filePath);
       if (fs.existsSync(fullPath)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf8');
