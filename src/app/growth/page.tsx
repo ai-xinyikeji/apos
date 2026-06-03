@@ -9,6 +9,7 @@ import {
   CardTitle 
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -118,6 +119,7 @@ const FEATURE_FILES: Record<string, { name: string; path: string }> = {
 };
 
 export default function GrowthPage() {
+  const { addToast } = useToast();
   const [data, setData] = useState<GrowthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
@@ -263,7 +265,7 @@ export default function GrowthPage() {
   async function triggerOptimization(featureName: string) {
     const fileInfo = FEATURE_FILES[featureName];
     if (!fileInfo) {
-      alert(`未找到功能 ${featureName} 关联的源代码文件配置`);
+      addToast({ type: 'error', title: '配置缺失', description: `未找到功能 ${featureName} 关联的源代码文件配置` });
       return;
     }
     
@@ -287,10 +289,10 @@ export default function GrowthPage() {
         setOptimizingResult(data.result);
       } else {
         const errData = await res.json();
-        alert(`优化分析失败: ${errData.error || '未知错误'}`);
+        addToast({ type: 'error', title: '优化分析失败', description: errData.error || '未知错误' });
       }
     } catch (err: any) {
-      alert(`调用优化服务时发生错误: ${err.message}`);
+      addToast({ type: 'error', title: '请求错误', description: `调用优化服务时发生错误: ${err.message}` });
     } finally {
       setLoadingOptimization(false);
     }
@@ -320,10 +322,10 @@ export default function GrowthPage() {
         setOptSuccessMessage(`优化代码已成功写入！原文件已备份到: ${data.backupFile}`);
       } else {
         const errData = await res.json();
-        alert(`应用失败: ${errData.error || '匹配不到目标代码'}`);
+        addToast({ type: 'error', title: '应用失败', description: errData.error || '匹配不到目标代码' });
       }
     } catch (err: any) {
-      alert(`应用代码修改时发生错误: ${err.message}`);
+      addToast({ type: 'error', title: '请求错误', description: `应用代码修改时发生错误: ${err.message}` });
     } finally {
       setApplyingOptimization(false);
     }

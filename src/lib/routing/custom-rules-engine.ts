@@ -83,7 +83,14 @@ export class CustomRulesEngine {
         priority: dbRule.priority,
         enabled: dbRule.enabled === 1, // SQLite stores boolean as 0 or 1
         conditions: {
-          taskTypes: dbRule.taskTypes ? JSON.parse(dbRule.taskTypes) as TaskType[] : undefined,
+          taskTypes: (() => {
+            try {
+              return dbRule.taskTypes ? JSON.parse(dbRule.taskTypes) as TaskType[] : undefined;
+            } catch {
+              console.warn(`[CustomRulesEngine] Invalid taskTypes JSON for rule ${dbRule.id}, ignoring`);
+              return undefined;
+            }
+          })(),
           contextSizeMin: dbRule.contextSizeMin ?? undefined,
           contextSizeMax: dbRule.contextSizeMax ?? undefined,
           codeComplexityMin: dbRule.codeComplexityMin ?? undefined,

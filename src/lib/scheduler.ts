@@ -22,7 +22,7 @@ export function startScheduler() {
     console.log(`[Scheduler] [Run: ${runId}] 启动每日反馈信号采集调度任务...`);
     const agent = new SignalCollectorAgent();
     try {
-      await agent.run({ sources: ['amplitude', 'zendesk', 'competitor'] }, runId);
+      await agent.execute({ sources: ['amplitude', 'zendesk', 'competitor'] }, runId);
     } catch (err) {
       console.error(`[Scheduler] [Run: ${runId}] 信号采集定时任务失败:`, err);
     }
@@ -34,7 +34,7 @@ export function startScheduler() {
     console.log(`[Scheduler] [Run: ${runId}] 启动周度产品洞察报告合成调度任务...`);
     const agent = new ReportGeneratorAgent();
     try {
-      await agent.run({ title: `每周需求与竞品洞察周报 (${new Date().toLocaleDateString()})` }, runId);
+      await agent.execute({ title: `每周需求与竞品洞察周报 (${new Date().toLocaleDateString()})` }, runId);
     } catch (err) {
       console.error(`[Scheduler] [Run: ${runId}] 报告合成定时任务失败:`, err);
     }

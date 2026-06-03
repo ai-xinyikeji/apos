@@ -1017,10 +1017,20 @@ Return your fixed code for these files as a JSON array of objects structured exa
 `;
 
   try {
-    const result = await generateText({
-      model: llm.model,
-      prompt,
-    });
+    let result: { text: string };
+    try {
+      result = await generateText({ model: llm.model, prompt });
+    } catch (llmErr: any) {
+      const msg: string = llmErr?.message || '';
+      const is404 = msg === 'Not Found' || msg === '404' || msg.startsWith('404 ') || llmErr?.status === 404 || llmErr?.statusCode === 404;
+      if (is404) {
+        process.stderr.write('[APOS MCP] Primary model 404, switching to fallback...\n');
+        const fallback = await routeModel('default');
+        result = await generateText({ model: fallback.model, prompt });
+      } else {
+        throw llmErr;
+      }
+    }
 
     const jsonMatch = result.text.match(/```json\s*([\s\S]*?)\s*```/) || [null, result.text];
     const jsonStr = jsonMatch[1]?.trim() || result.text.trim();

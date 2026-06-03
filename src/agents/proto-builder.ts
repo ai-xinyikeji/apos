@@ -2,7 +2,6 @@ import { BaseAgent } from './base';
 import { db } from '@/lib/db';
 import { prototypes } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
-import { generateText } from '@/lib/llm';
 import fs from 'fs';
 import path from 'path';
 import { createBranch, commitAndPush, createPullRequest } from '@/lib/git';
@@ -158,8 +157,7 @@ Return a JSON array of objects structured like:
         }];
       }
 
-      const result = await generateText({
-        model: llm.model,
+      const result = await this.callLLM(runId, llm, {
         messages,
       });
 
@@ -332,8 +330,7 @@ Return your fixed code for these files as a JSON array of objects structured exa
 \`\`\`
 `;
 
-        const { text } = await generateText({
-          model: llm.model,
+        const { text } = await this.callLLM(runId, llm, {
           prompt: healPrompt,
         });
 
@@ -403,8 +400,7 @@ Requirement:
 ${description}
 `;
 
-    const { text, usage } = await generateText({
-      model: llm.model,
+    const { text, usage } = await this.callLLM(runId, llm, {
       prompt,
     });
     

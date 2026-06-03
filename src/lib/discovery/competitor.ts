@@ -75,13 +75,25 @@ Return the result as a JSON block with:
 `;
 
     try {
-      const { getLLMClient } = await import('../llm');
-      const activeClient = await getLLMClient('ReportGenerator');
+      const { getLLMClient, generateText, routeModel } = await import('../llm');
+      let activeClient = await getLLMClient('ReportGenerator');
       
-      const { text } = await generateText({
-        model: activeClient.model,
-        prompt,
-      });
+      let text: string;
+      try {
+        const result = await generateText({ model: activeClient.model, prompt });
+        text = result.text;
+      } catch (llmErr: any) {
+        const msg: string = llmErr?.message || '';
+        const is404 = msg === 'Not Found' || msg === '404' || msg.startsWith('404 ') || llmErr?.status === 404 || llmErr?.statusCode === 404;
+        if (is404) {
+          console.warn('[CompetitorAnalyzer] Primary model 404, switching to fallback...');
+          activeClient = await routeModel('default');
+          const result = await generateText({ model: activeClient.model, prompt });
+          text = result.text;
+        } else {
+          throw llmErr;
+        }
+      }
 
       const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || [null, text];
       const jsonStr = jsonMatch[1]?.trim() || text.trim();

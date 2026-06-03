@@ -31,7 +31,9 @@ function MermaidBlock({ code }: { code: string }) {
         });
         const id = `mermaid-${Math.random().toString(36).slice(2)}`;
         const { svg } = await mermaid.render(id, code.trim());
-        if (!cancelled) setSvg(svg);
+        // Strip any script tags that could appear in SVG (defense-in-depth)
+        const sanitized = svg.replace(/<script[\s\S]*?<\/script>/gi, '');
+        if (!cancelled) setSvg(sanitized);
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? 'Mermaid render error');
       }

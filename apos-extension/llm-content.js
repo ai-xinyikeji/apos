@@ -1,289 +1,332 @@
 /**
- * APOS LLM Content Script
+ * APOS LLM Content Script v5.3
  *
  * 注入到 chatgpt.com / gemini.google.com / kimi.moonshot.cn 页面。
- * 在真实浏览器页面上下文里执行 LLM 请求，带完整浏览器指纹，
- * 绕过 Cloudflare / Turnstile 对 Service Worker fetch 的检测。
  *
- * background.js 通过 chrome.tabs.sendMessage 发送任务，
- * 本脚本执行后通过 sendResponse 返回结果。
+ * 统一方案（所有 provider）：
+ * 1. 收到任务后，通过 postMessage 通知 MAIN world hook 触发真实对话
+ * 2. MAIN world hook 拦截 SSE 流，通过 postMessage 把 chunks 传回来
+ * 3. 通过 long-lived connection 把 chunks 转发到 background.js
+ * 4. background.js 再 POST 到 APOS backend
+ *
+ * v5.0: 增强连接稳定性 - 自动重连、心跳保活、重试机制
+ * v5.1: 修复扩展重载时的上下文失效问题
+ * v5.2: 修复 bfcache (back/forward cache) 导致的连接断开问题
+ * v5.3: 扩展重载后在页面显示提示，引导用户刷新页面
  */
 
-const APOS_SERVER = 'http://localhost:3000';
+// 建立与 background.js 的持久连接
+let port = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY_MS = 1000;
 
-// ── PoW helper ────────────────────────────────────────────────────────────────
+// 心跳机制：定期 ping background.js 保持连接活跃
+let heartbeatInterval = null;
 
-async function solvePoW(seed, difficulty) {
+function startHeartbeat() {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    try {
+      // 先检查扩展上下文是否有效
+      chrome.runtime.getURL('');
+      
+      chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+        if (chrome.runtime.lastError) {
+          const error = chrome.runtime.lastError.message;
+          if (error.includes('Extension context invalidated')) {
+            console.warn('[APOS content] Extension context invalidated, stopping heartbeat');
+            stopHeartbeat();
+            notifyExtensionReloaded();
+            return;
+          }
+          console.warn('[APOS content] Heartbeat failed, reconnecting...');
+          reconnect();
+        } else if (!response) {
+          console.warn('[APOS content] Heartbeat failed, reconnecting...');
+          reconnect();
+        }
+      });
+    } catch (e) {
+      if (e.message.includes('Extension context invalidated')) {
+        console.warn('[APOS content] Extension context invalidated, stopping heartbeat');
+        stopHeartbeat();
+        notifyExtensionReloaded();
+      } else {
+        console.warn('[APOS content] Heartbeat error:', e.message);
+        reconnect();
+      }
+    }
+  }, 10_000); // 每10秒心跳一次
+}
+
+function stopHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+}
+
+function ensureConnection() {
+  if (port) return port;
+  
   try {
-    const res = await fetch(`${APOS_SERVER}/api/ext/pow-solve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seed, difficulty }),
+    port = chrome.runtime.connect({ name: 'llm-content' });
+    reconnectAttempts = 0;
+    
+    port.onDisconnect.addListener(() => {
+      console.log('[APOS content] Port disconnected');
+      port = null;
+      
+      // 检查是否是因为扩展上下文失效
+      if (chrome.runtime.lastError) {
+        const error = chrome.runtime.lastError.message;
+        if (error.includes('Extension context invalidated')) {
+          console.warn('[APOS content] Extension reloaded, stopping reconnection attempts');
+          stopHeartbeat();
+          notifyExtensionReloaded();
+          return;
+        }
+      }
+      
+      reconnect();
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.answer;
-  } catch {
+    
+    console.log('[APOS content] Connected to background.js');
+    startHeartbeat();
+    return port;
+  } catch (e) {
+    console.error('[APOS content] Failed to connect:', e.message);
+    
+    // 如果是扩展上下文失效，停止重连
+    if (e.message.includes('Extension context invalidated')) {
+      console.warn('[APOS content] Extension reloaded, stopping reconnection attempts');
+      stopHeartbeat();
+      notifyExtensionReloaded();
+      return null;
+    }
+    
+    port = null;
+    reconnect();
     return null;
   }
 }
 
-// ── ChatGPT ───────────────────────────────────────────────────────────────────
-
-async function executeChatGPT(prompt, cookies) {
-  // Step 1: access token — fetch from same-origin, no Cookie header needed
-  // (browser automatically sends cookies for chatgpt.com)
-  const sessionRes = await fetch('/api/auth/session', { credentials: 'include' });
-  if (!sessionRes.ok) throw new Error(`ChatGPT session failed (${sessionRes.status})`);
-  const sessionData = await sessionRes.json();
-  const accessToken = sessionData?.accessToken;
-  if (!accessToken) throw new Error('ChatGPT session expired — please re-sync cookies');
-
-  // Step 2: sentinel token + PoW
-  let chatToken = null;
-  let powToken = null;
-  try {
-    const reqRes = await fetch('/backend-api/sentinel/chat-requirements', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-      body: JSON.stringify({}),
-    });
-    if (reqRes.ok) {
-      const reqData = await reqRes.json();
-      chatToken = reqData?.token;
-      const pow = reqData?.proofofwork;
-      if (pow?.required && pow.seed) {
-        const answer = await solvePoW(pow.seed, pow.difficulty || 3);
-        if (answer !== null) {
-          const powPayload = JSON.stringify([pow.seed, answer, null, pow.difficulty || 3]);
-          powToken = 'gAAAAAB' + btoa(powPayload);
-        }
+function reconnect() {
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.error('[APOS content] Max reconnection attempts reached, giving up');
+    stopHeartbeat();
+    return;
+  }
+  
+  reconnectAttempts++;
+  console.log(`[APOS content] Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+  
+  setTimeout(() => {
+    // 再次检查扩展上下文是否有效
+    try {
+      chrome.runtime.getURL(''); // 测试扩展上下文是否有效
+      ensureConnection();
+    } catch (e) {
+      if (e.message.includes('Extension context invalidated')) {
+        console.warn('[APOS content] Extension context invalidated, stopping reconnection');
+        console.warn('[APOS content] 请刷新此页面（Cmd+R / Ctrl+R）以重新连接扩展');
+        stopHeartbeat();
+        notifyExtensionReloaded();
       }
     }
-  } catch (e) {
-    console.warn('[APOS LLM Content] ChatGPT sentinel failed:', e.message);
-  }
-
-  // Step 3: conversation
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
-    'Authorization': `Bearer ${accessToken}`,
-  };
-  if (chatToken) headers['Openai-Sentinel-Chat-Requirements-Token'] = chatToken;
-  if (powToken)  headers['Openai-Sentinel-Proof-Token'] = powToken;
-
-  const convRes = await fetch('/backend-api/f/conversation', {
-    method: 'POST',
-    credentials: 'include',
-    headers,
-    body: JSON.stringify({
-      action: 'next',
-      messages: [{
-        id: crypto.randomUUID(),
-        author: { role: 'user' },
-        create_time: Date.now() / 1000,
-        content: { content_type: 'text', parts: [prompt] },
-        metadata: {},
-      }],
-      parent_message_id: crypto.randomUUID(),
-      model: 'auto',
-      timezone_offset_min: -480,
-      timezone: 'Asia/Shanghai',
-      conversation_mode: { kind: 'primary_assistant' },
-      system_hints: [],
-      supports_buffering: true,
-      supported_encodings: ['v1'],
-      client_contextual_info: { app_name: 'chatgpt.com' },
-      history_and_training_disabled: true,
-    }),
-  });
-
-  if (!convRes.ok) {
-    const errText = await convRes.text();
-    throw new Error(`ChatGPT conversation error (${convRes.status}): ${errText.slice(0, 200)}`);
-  }
-
-  const body = await convRes.text();
-  let finalText = '';
-  for (const line of body.split('\n')) {
-    const t = line.trim();
-    if (!t.startsWith('data: ')) continue;
-    const d = t.slice(6).trim();
-    if (d === '[DONE]') break;
-    try {
-      const parsed = JSON.parse(d);
-      const parts = parsed.message?.content?.parts;
-      if (parts?.length > 0 && typeof parts[0] === 'string') finalText = parts[0];
-    } catch { /* skip */ }
-  }
-  if (!finalText) throw new Error('ChatGPT returned empty response');
-  return finalText;
+  }, RECONNECT_DELAY_MS * reconnectAttempts);
 }
 
-// ── Gemini ────────────────────────────────────────────────────────────────────
-
-async function executeGemini(prompt) {
-  // SNlM0e token is already in the page's JS globals — no need to re-fetch the page
-  let at = null;
+/**
+ * 扩展重载后在页面上显示一个短暂提示，引导用户刷新页面。
+ * 不影响 ChatGPT 正常使用，3 秒后自动消失。
+ */
+function notifyExtensionReloaded() {
   try {
-    // Try to extract from window (Gemini embeds it as a JS variable)
-    const scripts = document.querySelectorAll('script');
-    for (const s of scripts) {
-      const m = s.textContent.match(/"SNlM0e":"([^"]+)"/);
-      if (m) { at = m[1]; break; }
-    }
-  } catch { /* ignore */ }
+    // 避免重复显示
+    if (document.getElementById('apos-reload-notice')) return;
 
-  if (!at) {
-    // Fallback: fetch the page (same-origin, browser sends cookies automatically)
-    const pageRes = await fetch('/app', { credentials: 'include' });
-    if (!pageRes.ok) throw new Error(`Gemini page load failed (${pageRes.status})`);
-    const html = await pageRes.text();
-    const m = html.match(/"SNlM0e":"([^"]+)"/);
-    if (!m) throw new Error('Gemini SNlM0e token not found — cookies may be expired');
-    at = m[1];
+    const notice = document.createElement('div');
+    notice.id = 'apos-reload-notice';
+    notice.style.cssText = [
+      'position:fixed', 'bottom:24px', 'right:24px', 'z-index:99999',
+      'background:#1e293b', 'color:#f1f5f9', 'border:1px solid #334155',
+      'border-radius:10px', 'padding:12px 16px', 'font-size:13px',
+      'box-shadow:0 4px 20px rgba(0,0,0,0.4)', 'display:flex',
+      'align-items:center', 'gap:10px', 'max-width:320px',
+      'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
+    ].join(';');
+
+    notice.innerHTML = `
+      <span style="font-size:18px">🔄</span>
+      <div>
+        <div style="font-weight:600;margin-bottom:2px">APOS 扩展已重载</div>
+        <div style="color:#94a3b8;font-size:12px">请刷新页面以重新连接</div>
+      </div>
+      <button onclick="location.reload()" style="
+        margin-left:auto; background:#3b82f6; color:#fff; border:none;
+        border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;
+        white-space:nowrap;
+      ">刷新</button>
+    `;
+
+    document.body.appendChild(notice);
+
+    // 5 秒后自动消失
+    setTimeout(() => notice.remove(), 5000);
+  } catch (_) {
+    // 页面环境异常时静默失败
   }
-
-  const innerPayload = JSON.stringify([null, prompt, 'zh-CN', null, 2]);
-  const fReq = JSON.stringify([[['XqA3Ic', innerPayload, null, 'generic']]]);
-  const bodyParams = new URLSearchParams();
-  bodyParams.append('f.req', fReq);
-  bodyParams.append('at', at);
-
-  const execRes = await fetch('/_/BardChatUi/data/batchexecute?rpcids=XqA3Ic&rt=c', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
-    body: bodyParams.toString(),
-  });
-  if (!execRes.ok) throw new Error(`Gemini batchexecute failed (${execRes.status})`);
-
-  const text = await execRes.text();
-  for (const line of text.split('\n')) {
-    if (!line.includes('XqA3Ic')) continue;
-    const match = line.match(/\[\[\["XqA3Ic".*/);
-    if (!match) continue;
-    try {
-      const parsed = JSON.parse(match[0]);
-      const inner = JSON.parse(parsed[0][0][1]);
-      const result = extractGeminiText(inner, prompt);
-      if (result) return result;
-    } catch { /* skip */ }
-  }
-  throw new Error('Gemini returned empty response');
 }
 
-function extractGeminiText(data, prompt) {
-  try {
-    const txt = data?.[4]?.[0]?.[1]?.[0];
-    if (txt && txt !== prompt) return txt;
-  } catch { /* skip */ }
-  let longest = '';
-  function search(obj) {
-    if (typeof obj === 'string') {
-      const t = obj.trim();
-      if (t.length > longest.length && t !== prompt && !t.startsWith('c_') && !t.startsWith('r_')) {
-        longest = t;
-      }
-    } else if (Array.isArray(obj)) { obj.forEach(search); }
-    else if (obj && typeof obj === 'object') { Object.values(obj).forEach(search); }
-  }
-  search(data);
-  return longest;
-}
+/**
+ * 通用流式执行函数：通知 MAIN world hook 触发对话，监听 SSE chunks 并转发到 backend。
+ * v5.0: 增加重试机制，确保消息能够送达
+ */
+async function executeViaHook(prompt, taskId) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      reject(new Error(`Stream timeout (90s) for task ${taskId}`));
+    }, 90_000);
 
-// ── Kimi ──────────────────────────────────────────────────────────────────────
+    let accumulatedText = '';
 
-async function executeKimi(prompt) {
-  // Token refresh — same-origin, browser sends cookies automatically
-  const tokenRes = await fetch('/api/auth/token/refresh', {
-    credentials: 'include',
-    headers: { 'Accept': 'application/json', 'Referer': 'https://kimi.moonshot.cn/' },
-  });
-  if (!tokenRes.ok) throw new Error(`Kimi token refresh failed (${tokenRes.status})`);
-  const tokenData = await tokenRes.json();
-  const accessToken = tokenData?.access_token;
-  if (!accessToken) throw new Error('Kimi access_token not found — cookies may be expired');
-
-  const chatRes = await fetch('/api/chat', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'APOS Chat', is_example: false }),
-  });
-  if (!chatRes.ok) throw new Error(`Kimi chat session failed (${chatRes.status})`);
-  const chatData = await chatRes.json();
-  const chatId = chatData?.id;
-  if (!chatId) throw new Error('Kimi chat ID not found');
-
-  try {
-    const compRes = await fetch(`/api/chat/${chatId}/completion/stream`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-      },
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], use_search: false }),
-    });
-    if (!compRes.ok) throw new Error(`Kimi completion failed (${compRes.status})`);
-
-    const text = await compRes.text();
-    let lastEvent = '';
-    let finalText = '';
-    for (const line of text.split('\n')) {
-      const t = line.trim();
-      if (!t) continue;
-      if (t.startsWith('event: ')) { lastEvent = t.slice(7).trim(); continue; }
-      if (!t.startsWith('data: ')) continue;
-      const d = t.slice(6).trim();
-      if (d === '[DONE]') break;
-      try {
-        const parsed = JSON.parse(d);
-        if ((lastEvent === 'text' || parsed.event === 'text') && typeof parsed.text === 'string') {
-          finalText += parsed.text;
+    // 带重试的消息发送函数
+    async function sendWithRetry(message, maxRetries = 3) {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const p = ensureConnection();
+          if (!p) {
+            throw new Error('No connection available');
+          }
+          p.postMessage(message);
+          return true;
+        } catch (err) {
+          console.error(`[APOS content] Send attempt ${attempt}/${maxRetries} failed:`, err.message);
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 500 * attempt));
+            reconnect();
+          } else {
+            throw err;
+          }
         }
-      } catch { /* skip */ }
+      }
+      return false;
     }
-    if (!finalText) throw new Error('Kimi returned empty response');
-    return finalText;
-  } finally {
-    fetch(`/api/chat/${chatId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    }).catch(() => {});
-  }
+
+    function handler(event) {
+      if (event.source !== window) return;
+      const { type, taskId: tid, chunk, error } = event.data || {};
+      if (tid !== taskId) return;
+
+      if (type === 'APOS_STREAM_CHUNK') {
+        console.log(`[APOS content] Received chunk for ${taskId}:`, chunk.slice(0, 20));
+        accumulatedText += chunk;
+        // 通过持久连接转发 chunk 到 background.js（带重试）
+        sendWithRetry({ type: 'chunk', taskId, chunk }).catch(err => {
+          console.error(`[APOS content] Failed to forward chunk after retries:`, err.message);
+        });
+
+      } else if (type === 'APOS_STREAM_DONE') {
+        console.log(`[APOS content] Stream done for ${taskId}, total text:`, accumulatedText.length, 'chars');
+        clearTimeout(timeout);
+        window.removeEventListener('message', handler);
+        // 通过持久连接通知 backend 流结束（带重试）
+        sendWithRetry({ type: 'done', taskId }).catch(err => {
+          console.error(`[APOS content] Failed to forward done after retries:`, err.message);
+        });
+        resolve(accumulatedText);
+
+      } else if (type === 'APOS_STREAM_ERROR') {
+        console.error(`[APOS content] Stream error for ${taskId}:`, error);
+        clearTimeout(timeout);
+        window.removeEventListener('message', handler);
+        // 通过持久连接通知 backend 出错（带重试）
+        sendWithRetry({ type: 'error', taskId, error: error || 'Stream error' }).catch(err => {
+          console.error(`[APOS content] Failed to forward error after retries:`, err.message);
+        });
+        reject(new Error(error || 'Stream error'));
+      }
+    }
+
+    window.addEventListener('message', handler);
+
+    // 触发 MAIN world hook
+    window.postMessage({ type: 'APOS_TRIGGER_CHAT', taskId, prompt }, '*');
+    console.log(`[APOS content] Triggered chat for task: ${taskId} on ${location.hostname}`);
+  });
 }
 
 // ── Message listener ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action !== 'execute_llm') return false;
-
-  const { provider, prompt, cookies } = request;
-  console.log(`[APOS LLM Content] Executing ${provider} request in page context`);
-
-  let task;
-  if (provider === 'chatgpt') {
-    task = executeChatGPT(prompt, cookies);
-  } else if (provider === 'gemini') {
-    task = executeGemini(prompt);
-  } else if (provider === 'kimi') {
-    task = executeKimi(prompt);
-  } else {
-    sendResponse({ error: `Unknown provider: ${provider}` });
+  if (request.action === 'ping') {
+    sendResponse({ pong: true });
     return false;
   }
 
-  task
-    .then(text => sendResponse({ text }))
-    .catch(err => sendResponse({ error: err.message }));
+  if (request.action !== 'execute_llm') return false;
 
-  return true; // keep channel open for async response
+  const { provider, prompt, taskId } = request;
+  console.log(`[APOS LLM Content] Executing ${provider} request, taskId: ${taskId}`);
+
+  // 立即 ack，让 background.js 知道任务已接收
+  // 实际流数据通过 /api/ext/stream-chunk 异步推送
+  sendResponse({ ack: true });
+
+  // 异步执行，不阻塞 sendResponse
+  executeViaHook(prompt, taskId).catch(err => {
+    console.error(`[APOS LLM Content] Task ${taskId} failed:`, err.message);
+    // 如果 executeViaHook 内部没有发送 error chunk，这里补发
+    try {
+      const p = ensureConnection();
+      p.postMessage({ type: 'error', taskId, error: err.message });
+    } catch (e) {
+      console.error(`[APOS content] Failed to forward error:`, e.message);
+    }
+  });
+
+  return false; // 已同步 sendResponse，不需要保持通道
 });
 
-console.log('[APOS LLM Content] Ready on', location.hostname);
+// 初始化连接
+ensureConnection();
+
+// 处理 bfcache (back/forward cache) 事件
+// 当页面从 bfcache 恢复时，重新建立连接
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    // 页面从 bfcache 恢复
+    console.log('[APOS content] Page restored from bfcache, reconnecting...');
+    port = null; // 清除旧连接
+    reconnectAttempts = 0;
+    ensureConnection();
+  }
+});
+
+// 检查是否存在由于跨页跳转挂起的搜索任务
+try {
+  const raw = sessionStorage.getItem('__apos_pending_search__');
+  if (raw) {
+    const { taskId, query } = JSON.parse(raw);
+    console.log(`[APOS content] 发现跨页挂起的搜索任务: "${query}" (${taskId})`);
+    sessionStorage.removeItem('__apos_pending_search__');
+    
+    // 延迟一小段时间执行，确保页面和 Hook 脚本完全加载就绪
+    setTimeout(() => {
+      executeViaHook(query, taskId).catch(err => {
+        console.error(`[APOS content] 恢复执行任务失败:`, err.message);
+        try {
+          const p = ensureConnection();
+          if (p) p.postMessage({ type: 'error', taskId, error: err.message });
+        } catch (_) {}
+      });
+    }, 100);
+  }
+} catch (e) {
+  console.error('[APOS content] 检查挂起任务失败:', e);
+}
+
+console.log('[APOS LLM Content] v5.3 Ready on', location.hostname);

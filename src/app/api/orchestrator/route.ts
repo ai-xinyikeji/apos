@@ -39,12 +39,15 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Clamp maxParallel to a safe range
+    const safeMaxParallel = Math.max(1, Math.min(Number(maxParallel) || 3, 10));
     
     // Track execution progress
     const events: any[] = [];
     
     const { success, results, dag } = await orchestrator.executeWorkflow(workflowName, {
-      maxParallel,
+      maxParallel: safeMaxParallel,
       onTaskStart: (task) => {
         events.push({
           type: 'task_start',
@@ -91,7 +94,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error.message, stack: error.stack },
+      { success: false, error: error.message },
       { status: 500 }
     );
   }

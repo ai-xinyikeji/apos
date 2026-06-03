@@ -64,6 +64,33 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { daily, weekly, monthly, alertThresholds, autoDowngrade } = body;
 
+    // Validate numeric budget values (stored as cents, so value is dollars here)
+    const MAX_BUDGET_USD = 100_000; // $100k hard cap
+    for (const [field, val] of [['daily', daily], ['weekly', weekly], ['monthly', monthly]] as const) {
+      if (val !== undefined) {
+        const n = Number(val);
+        if (!isFinite(n) || n < 0) {
+          return NextResponse.json({ error: `${field} must be a non-negative number` }, { status: 400 });
+        }
+        if (n > MAX_BUDGET_USD) {
+          return NextResponse.json({ error: `${field} cannot exceed $${MAX_BUDGET_USD}` }, { status: 400 });
+        }
+      }
+    }
+
+    // Validate alertThresholds — must be array of numbers 1-100
+    if (alertThresholds !== undefined) {
+      if (!Array.isArray(alertThresholds) || alertThresholds.length > 10) {
+        return NextResponse.json({ error: 'alertThresholds must be an array of up to 10 numbers' }, { status: 400 });
+      }
+      for (const t of alertThresholds) {
+        const n = Number(t);
+        if (!isFinite(n) || n < 1 || n > 100) {
+          return NextResponse.json({ error: 'alertThresholds values must be between 1 and 100' }, { status: 400 });
+        }
+      }
+    }
+
     const upsert = async (key: string, value: string) => {
       await db
         .insert(settings)

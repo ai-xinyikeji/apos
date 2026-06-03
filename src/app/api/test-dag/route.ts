@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TaskDAG, type Task } from '@/lib/orchestrator/task-dag';
 import { TaskExecutor } from '@/lib/orchestrator/task-executor';
 
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 /**
- * POST /api/test-dag - Test Task DAG system with a simple example
+ * POST /api/test-dag - Test Task DAG system (dev only)
  */
 export async function POST(request: NextRequest) {
+  if (!IS_DEV) {
+    return NextResponse.json({ error: 'This endpoint is only available in development' }, { status: 403 });
+  }
   try {
     // Create a simple test DAG
     const dag = new TaskDAG();
@@ -134,7 +139,7 @@ export async function POST(request: NextRequest) {
       { 
         success: false, 
         error: error.message,
-        stack: error.stack,
+        stack: IS_DEV ? error.stack : undefined,
       },
       { status: 500 }
     );

@@ -9,6 +9,7 @@ import {
   CardTitle 
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { 
   Play, 
   Square, 
@@ -83,6 +84,7 @@ interface ExecutionResult {
 }
 
 export default function WorkflowsPage() {
+  const { addToast } = useToast();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState<string | null>(null);
@@ -200,7 +202,7 @@ export default function WorkflowsPage() {
     const ids = wfTasks.map(t => t.id.trim());
     const uniqueIds = new Set(ids);
     if (ids.length !== uniqueIds.size) {
-      alert('任务 ID 必须在工作流中唯一，请检查命名！');
+      addToast({ type: 'error', title: '验证失败', description: '任务 ID 必须在工作流中唯一，请检查命名！' });
       return;
     }
 
@@ -253,10 +255,10 @@ export default function WorkflowsPage() {
         });
       } else {
         const errData = await res.json();
-        alert(`保存失败: ${errData.error}`);
+        addToast({ type: 'error', title: '保存失败', description: errData.error });
       }
     } catch (err: any) {
-      alert(`保存失败: ${err.message}`);
+      addToast({ type: 'error', title: '保存失败', description: err.message });
     } finally {
       setSaving(false);
     }
@@ -278,10 +280,10 @@ export default function WorkflowsPage() {
         setMessage({ type: 'success', text: `工作流 "${name}" 已删除` });
       } else {
         const errData = await res.json();
-        alert(`删除失败: ${errData.error}`);
+        addToast({ type: 'error', title: '删除失败', description: errData.error });
       }
     } catch (err) {
-      alert('删除失败，请检查网络');
+      addToast({ type: 'error', title: '删除失败', description: '请检查网络连接' });
     }
   }
 

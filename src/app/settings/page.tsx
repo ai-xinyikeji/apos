@@ -70,6 +70,27 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [syncingCookies, setSyncingCookies] = useState(false);
   const [extensionInstalled, setExtensionInstalled] = useState(false);
+  const [capturedHeaders, setCapturedHeaders] = useState<{
+    chatgpt: Record<string, string> | null;
+    gemini: Record<string, string> | null;
+    kimi: Record<string, string> | null;
+  }>({ chatgpt: null, gemini: null, kimi: null });
+  const [showHeaderDetails, setShowHeaderDetails] = useState<Record<string, boolean>>({
+    chatgpt: false, gemini: false, kimi: false,
+  });
+  const [extStatus, setExtStatus] = useState<{
+    online: boolean;
+    lastHeartbeatAt: number | null;
+    version: string | null;
+    tabs: {
+      chatgpt: { open: boolean; url?: string };
+      gemini:  { open: boolean; url?: string };
+      kimi:    { open: boolean; url?: string };
+      google:  { open: boolean; url?: string };
+    };
+    logs: Array<{ ts: number; level: string; msg: string }>;
+  } | null>(null);
+  const [showExtLogs, setShowExtLogs] = useState(false);
   const [lmStudioStatus, setLMStudioStatus] = useState<{
     available: boolean;
     models: string[];
@@ -80,6 +101,14 @@ export default function SettingsPage() {
     checking: boolean;
   }>({ available: false, checking: false });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Test connection state
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string; timestamp: number } | null>>({
+    chatgpt: null,
+    gemini: null,
+    kimi: null,
+  });
 
   async function checkOpenHands(targetUrl?: string) {
     const urlToCheck = targetUrl !== undefined ? targetUrl : formData.OPENHANDS_API_URL;
@@ -160,6 +189,12 @@ export default function SettingsPage() {
           model_task_retrieval: data.model_task_retrieval || 'default',
           model_task_planning: data.model_task_planning || 'default',
           model_task_refactor: data.model_task_refactor || 'default',
+        });
+        // Load captured headers
+        setCapturedHeaders({
+          chatgpt: data.chatgpt_headers || null,
+          gemini: data.gemini_headers || null,
+          kimi: data.kimi_headers || null,
         });
         return data;
       }
@@ -342,34 +377,68 @@ export default function SettingsPage() {
     checkLMStudio();
     loadMcpConfig();
 
+    // Poll extension status every 3 seconds
+    const fetchExtStatus = async () => {
+      try {
+        const res = await fetch('/api/ext/status');
+        if (res.ok) setExtStatus(await res.json());
+      } catch { /* ignore */ }
+    };
+    fetchExtStatus();
+    const extStatusTimer = setInterval(fetchExtStatus, 3000);
+
     // Detect browser companion extension
     if (typeof document !== 'undefined') {
-      const isInstalled = document.documentElement.getAttribute('data-apos-extension-installed') === 'true';
-      setExtensionInstalled(isInstalled);
+      const checkInstalled = () => {
+        const isInstalled = document.documentElement.getAttribute('data-apos-extension-installed') === 'true';
+        if (isInstalled) setExtensionInstalled(true);
+        return isInstalled;
+      };
+
+      checkInstalled();
 
       const handleInstalled = () => setExtensionInstalled(true);
       window.addEventListener('apos-extension-installed', handleInstalled);
 
-      // Listen for cookie sync response
+      const pollTimer = setInterval(() => {
+        if (checkInstalled()) clearInterval(pollTimer);
+      }, 300);
+      setTimeout(() => clearInterval(pollTimer), 5000);
+
       const handleSyncResponse = (e: Event & { detail?: { success: boolean; error?: string } }) => {
         const detail = e.detail;
         if (detail) {
           if (detail.success) {
-            setMessage({ type: 'success', text: '网页版 Cookies 已成功自动同步并保存！' });
+            setMessage({ type: 'success', text: '网页版 Cookies 和请求头已成功同步！' });
             loadSettings();
           } else {
-            setMessage({ type: 'error', text: `Cookies 自动同步失败: ${detail.error || '未知错误'}` });
+            setMessage({ type: 'error', text: `同步失败: ${detail.error || '未知错误'}` });
           }
         }
         setSyncingCookies(false);
       };
       window.addEventListener('apos-sync-cookies-response', handleSyncResponse as EventListener);
 
+      const handleAutoSynced = () => {
+        loadSettings();
+        addToast({
+          type: 'success',
+          title: '自动同步完成',
+          description: '插件已检测到变化并自动同步最新数据。',
+        });
+      };
+      window.addEventListener('apos-auto-synced', handleAutoSynced);
+
       return () => {
+        clearInterval(extStatusTimer);
+        clearInterval(pollTimer);
         window.removeEventListener('apos-extension-installed', handleInstalled);
         window.removeEventListener('apos-sync-cookies-response', handleSyncResponse as EventListener);
+        window.removeEventListener('apos-auto-synced', handleAutoSynced);
       };
     }
+
+    return () => clearInterval(extStatusTimer);
   }, []);
 
   const handleInputChange = (key: string, value: string) => {
@@ -440,6 +509,133 @@ export default function SettingsPage() {
     setSyncingCookies(true);
     setMessage(null);
     window.dispatchEvent(new CustomEvent('apos-sync-cookies-request'));
+  };
+
+  const handleTestConnection = async (provider: 'chatgpt' | 'gemini' | 'kimi') => {
+    setTestingProvider(provider);
+    setTestResults(prev => ({ ...prev, [provider]: null }));
+    
+    try {
+      // Create a test task
+      const testPrompt = '你好，请回复"测试成功"';
+      const res = await fetch('/api/ext/llm-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          prompt: testPrompt,
+        }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        setTestResults(prev => ({
+          ...prev,
+          [provider]: {
+            success: false,
+            message: errorData.error || '测试失败',
+            timestamp: Date.now(),
+          },
+        }));
+        addToast({
+          type: 'error',
+          title: `${provider.toUpperCase()} 测试失败`,
+          description: errorData.error || '无法创建测试任务',
+        });
+        return;
+      }
+      
+      const data = await res.json();
+      const taskId = data.taskId;
+      
+      // Poll for result (max 30 seconds)
+      let attempts = 0;
+      const maxAttempts = 60; // 30 seconds with 500ms interval
+      
+      const checkResult = async (): Promise<boolean> => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          setTestResults(prev => ({
+            ...prev,
+            [provider]: {
+              success: false,
+              message: '测试超时（30秒）',
+              timestamp: Date.now(),
+            },
+          }));
+          addToast({
+            type: 'error',
+            title: `${provider.toUpperCase()} 测试超时`,
+            description: '任务执行时间超过 30 秒',
+          });
+          return false;
+        }
+        
+        try {
+          const resultRes = await fetch(`/api/ext/llm-result?taskId=${taskId}`);
+          if (resultRes.ok) {
+            const resultData = await resultRes.json();
+            
+            if (resultData.status === 'completed' && resultData.result) {
+              setTestResults(prev => ({
+                ...prev,
+                [provider]: {
+                  success: true,
+                  message: `测试成功！响应: ${resultData.result.slice(0, 50)}...`,
+                  timestamp: Date.now(),
+                },
+              }));
+              addToast({
+                type: 'success',
+                title: `${provider.toUpperCase()} 测试成功`,
+                description: '连接正常，可以正常使用',
+              });
+              return true;
+            } else if (resultData.status === 'failed') {
+              setTestResults(prev => ({
+                ...prev,
+                [provider]: {
+                  success: false,
+                  message: `测试失败: ${resultData.error || '未知错误'}`,
+                  timestamp: Date.now(),
+                },
+              }));
+              addToast({
+                type: 'error',
+                title: `${provider.toUpperCase()} 测试失败`,
+                description: resultData.error || '任务执行失败',
+              });
+              return false;
+            }
+          }
+        } catch (err) {
+          console.error('Error checking result:', err);
+        }
+        
+        // Continue polling
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return checkResult();
+      };
+      
+      await checkResult();
+      
+    } catch (err: any) {
+      setTestResults(prev => ({
+        ...prev,
+        [provider]: {
+          success: false,
+          message: `测试异常: ${err.message}`,
+          timestamp: Date.now(),
+        },
+      }));
+      addToast({
+        type: 'error',
+        title: `${provider.toUpperCase()} 测试异常`,
+        description: err.message || '网络连接失败',
+      });
+    } finally {
+      setTestingProvider(null);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -907,45 +1103,21 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2 text-base">
               <Globe className="h-4.5 w-4.5 text-cyan-400" />
-              网页版大模型 (免 API Key Cookie 同步)
+              网页版大模型 (免 API Key · 完整请求头同步)
             </CardTitle>
             <CardDescription className="text-slate-350 text-xs">
-              通过安装浏览器伴侣插件，本系统可以全自动读取您当前 Chrome 中登录的 ChatGPT、Gemini 和 Kimi 网页版 Session，实现大模型“免 API 额度”白嫖运行。
+              浏览器插件自动捕获 ChatGPT、Gemini 和 Kimi 的完整请求头（含 User-Agent、Authorization、cf-clearance 等），比单纯 Cookie 更稳定，可有效避免 403 拦截。插件检测到变化后会实时自动同步，无需手动操作。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between p-4 rounded-xl border border-slate-700/80 bg-slate-950/40">
-              <div className="space-y-1">
-                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5">
-                  ChatGPT Web Cookie: 
-                  {formData.chatgpt_cookies ? (
-                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
-                    </span>
-                  ) : (
-                    <span className="text-slate-100">未同步</span>
-                  )}
-                </div>
-                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5 mt-1">
-                  Gemini Web Cookie: 
-                  {formData.gemini_cookies ? (
-                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
-                    </span>
-                  ) : (
-                    <span className="text-slate-100">未同步</span>
-                  )}
-                </div>
-                <div className="text-xs text-slate-100 font-mono flex items-center gap-1.5 mt-1">
-                  Kimi Web Cookie: 
-                  {formData.kimi_cookies ? (
-                    <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                      <ShieldCheck className="h-3.5 w-3.5" /> 已同步
-                    </span>
-                  ) : (
-                    <span className="text-slate-100">未同步</span>
-                  )}
-                </div>
+
+            {/* Extension status + sync button */}
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between p-4 rounded-xl border border-slate-700/80 bg-slate-950/40">
+              <div className="flex items-center gap-2">
+                <div className={`h-2 w-2 rounded-full ${extensionInstalled ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className="text-sm font-medium text-slate-200">
+                  {extensionInstalled ? '✅ 插件已连接 · 实时自动同步中' : '⚠️ 未检测到插件'}
+                </span>
               </div>
 
               {extensionInstalled ? (
@@ -953,41 +1125,239 @@ export default function SettingsPage() {
                   type="button"
                   onClick={handleSyncCookies}
                   disabled={syncingCookies}
-                  className="bg-cyan-600/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-600/20 text-xs rounded-xl h-8 px-3.5 shrink-0 animate-pulse"
+                  className="bg-cyan-600/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-600/20 text-xs rounded-xl h-8 px-3.5 shrink-0"
                 >
                   {syncingCookies ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      同步中...
-                    </>
+                    <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />同步中...</>
                   ) : (
-                    <>
-                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                      一键同步浏览器 Cookie
-                    </>
+                    <><RefreshCw className="mr-1.5 h-3.5 w-3.5" />手动立即同步</>
                   )}
                 </Button>
               ) : (
                 <div className="text-xs text-amber-400/90 bg-amber-500/5 border border-amber-500/10 px-3 py-2 rounded-xl max-w-md leading-normal font-sans">
-                  提示：未检测到伴侣插件。请在 Chrome 中以开发者模式加载项目下的 <code>apos-extension/</code> 目录以启用一键同步。
+                  请在 Chrome 中以开发者模式加载 <code>apos-extension/</code> 目录，然后访问 chatgpt.com 等网站触发自动捕获。
                 </div>
               )}
             </div>
 
-            {/* Manual cookie removal input */}
+            {/* Real-time extension status panel */}
+            {extStatus && (
+              <div className="rounded-xl border border-slate-700/50 bg-slate-950/30 overflow-hidden">
+                {/* Header row */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/40 bg-slate-900/40">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-2 w-2 rounded-full ${extStatus.online ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+                    <span className="text-xs font-semibold text-slate-200">
+                      插件状态 {extStatus.online ? '· 在线' : '· 离线'}
+                      {extStatus.version && <span className="text-slate-100 font-normal ml-1">v{extStatus.version}</span>}
+                    </span>
+                    {extStatus.lastHeartbeatAt && (
+                      <span className="text-[10px] text-slate-100">
+                        最后心跳: {new Date(extStatus.lastHeartbeatAt).toLocaleTimeString('zh-CN')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowExtLogs(v => !v)}
+                      className="text-[10px] text-slate-100 hover:text-slate-200 transition-colors px-2 py-0.5 rounded border border-slate-700/50 hover:border-slate-600"
+                    >
+                      {showExtLogs ? '收起日志' : `查看日志 (${extStatus.logs.length})`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => { await fetch('/api/ext/status', { method: 'DELETE' }); }}
+                      className="text-[10px] text-slate-100 hover:text-rose-400 transition-colors"
+                      title="清空日志"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab status row */}
+                <div className="flex gap-4 px-3 py-2 border-b border-slate-700/30">
+                  {(['chatgpt', 'gemini', 'kimi', 'google'] as const).map(p => {
+                    const tabInfo = extStatus.tabs[p];
+                    const labels: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini', kimi: 'Kimi', google: 'Google' };
+                    const sites: Record<string, string> = { chatgpt: 'chatgpt.com', gemini: 'gemini.google.com', kimi: 'kimi.moonshot.cn', google: 'google.com' };
+                    return (
+                      <div key={p} className="flex items-center gap-1.5 text-xs">
+                        <div className={`h-1.5 w-1.5 rounded-full ${tabInfo?.open ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                        <span className={tabInfo?.open ? 'text-emerald-400' : 'text-slate-100'}>
+                          {labels[p]}
+                        </span>
+                        {!tabInfo?.open && (
+                          <span className="text-slate-100 text-[10px]">
+                            (需打开 {sites[p]})
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Log entries */}
+                {showExtLogs && (
+                  <div className="max-h-52 overflow-y-auto p-2 space-y-0.5 font-mono">
+                    {extStatus.logs.length === 0 ? (
+                      <p className="text-xs text-slate-100 text-center py-3">暂无日志</p>
+                    ) : (
+                      [...extStatus.logs].reverse().map((entry, i) => {
+                        const colors: Record<string, string> = {
+                          info:    'text-slate-300',
+                          success: 'text-emerald-400',
+                          warn:    'text-amber-400',
+                          error:   'text-rose-400',
+                        };
+                        return (
+                          <div key={i} className={`flex gap-2 text-[11px] leading-relaxed ${colors[entry.level] || 'text-slate-300'}`}>
+                            <span className="text-slate-100 shrink-0 tabular-nums">
+                              {new Date(entry.ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                            <span className="break-all">{entry.msg}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Per-provider status with header details */}
+            {(['chatgpt', 'gemini', 'kimi'] as const).map((provider) => {
+              const labels: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini', kimi: 'Kimi' };
+              const cookieKey = `${provider}_cookies` as keyof typeof formData;
+              const hasCookie = !!formData[cookieKey];
+              const headers = capturedHeaders[provider];
+              const headerCount = headers ? Object.keys(headers).length : 0;
+              const isExpanded = showHeaderDetails[provider];
+              const testResult = testResults[provider];
+              const isTesting = testingProvider === provider;
+              const tabInfo = extStatus?.tabs[provider];
+
+              return (
+                <div key={provider} className="rounded-xl border border-slate-700/80 bg-slate-950/20 overflow-hidden">
+                  <div className="flex items-center justify-between p-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-2 w-2 rounded-full ${hasCookie ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                      <span className="text-sm font-medium text-slate-200">{labels[provider]}</span>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap justify-end">
+                      <div className="text-xs text-slate-100 font-mono flex items-center gap-1">
+                        Cookie:
+                        {hasCookie ? (
+                          <span className="text-emerald-400 flex items-center gap-0.5 ml-1">
+                            <ShieldCheck className="h-3 w-3" /> 已同步
+                          </span>
+                        ) : (
+                          <span className="text-slate-100 ml-1">未同步</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-100 font-mono flex items-center gap-1">
+                        请求头:
+                        {headers ? (
+                          <span className="text-cyan-400 ml-1">{headerCount} 个</span>
+                        ) : (
+                          <span className="text-slate-100 ml-1">未捕获</span>
+                        )}
+                      </div>
+                      {headers && (
+                        <button
+                          type="button"
+                          onClick={() => setShowHeaderDetails(prev => ({ ...prev, [provider]: !prev[provider] }))}
+                          className="text-xs text-slate-100 hover:text-slate-200 flex items-center gap-1 transition-colors"
+                        >
+                          {isExpanded ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                          {isExpanded ? '收起' : '查看详情'}
+                        </button>
+                      )}
+                      {/* Test Connection Button */}
+                      <Button
+                        type="button"
+                        onClick={() => handleTestConnection(provider)}
+                        disabled={isTesting || !hasCookie || !tabInfo?.open}
+                        variant="outline"
+                        className="border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-lg text-xs h-7 px-3"
+                      >
+                        {isTesting ? (
+                          <>
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            测试中...
+                          </>
+                        ) : (
+                          <>
+                            <Activity className="mr-1 h-3 w-3" />
+                            测试连接
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Test Result Display */}
+                  {testResult && (
+                    <div className={`px-3 py-2 border-t border-slate-700/40 flex items-start gap-2 text-xs ${
+                      testResult.success 
+                        ? 'bg-emerald-500/5 text-emerald-400' 
+                        : 'bg-rose-500/5 text-rose-400'
+                    }`}>
+                      {testResult.success ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <p className="font-medium">{testResult.message}</p>
+                        <p className="text-[10px] text-slate-100 mt-0.5">
+                          {new Date(testResult.timestamp).toLocaleString('zh-CN')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expanded header details */}
+                  {isExpanded && headers && (
+                    <div className="border-t border-slate-700/40 p-3 bg-slate-950/40">
+                      <p className="text-xs text-slate-100 mb-2 font-semibold">已捕获的请求头（共 {headerCount} 个）：</p>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {Object.entries(headers).map(([key, value]) => (
+                          <div key={key} className="flex gap-2 text-xs font-mono">
+                            <span className="text-cyan-400 shrink-0 w-44 truncate">{key}</span>
+                            <span className="text-slate-100 truncate flex-1">
+                              {key === 'cookie'
+                                ? `${String(value).slice(0, 40)}... (${String(value).split(';').length} 个 cookie)`
+                                : key === 'authorization'
+                                ? `${String(value).slice(0, 20)}••••`
+                                : String(value).slice(0, 80)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Clear button */}
             {(formData.chatgpt_cookies || formData.gemini_cookies || formData.kimi_cookies) && (
-              <div className="pt-2 text-right">
+              <div className="pt-2 flex justify-end">
                 <button
                   type="button"
                   onClick={() => {
                     handleInputChange('chatgpt_cookies', '');
                     handleInputChange('gemini_cookies', '');
                     handleInputChange('kimi_cookies', '');
-                    setMessage({ type: 'success', text: '已清除本地 Cookie 配置，保存后生效。' });
+                    setCapturedHeaders({ chatgpt: null, gemini: null, kimi: null });
+                    setMessage({ type: 'success', text: '已清除本地 Cookie 和请求头配置，保存后生效。' });
                   }}
-                  className="text-slate-350 hover:text-rose-400 text-xs transition-colors"
+                  className="text-slate-350 hover:text-rose-400 text-xs transition-colors flex items-center gap-1"
                 >
-                  清除已同步的 Cookies
+                  <Trash2 className="h-3 w-3" />
+                  清除已同步的 Cookies 和请求头
                 </button>
               </div>
             )}

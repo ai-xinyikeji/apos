@@ -2,18 +2,23 @@ import path from 'path';
 import fs from 'fs';
 
 let extractor: any = null;
+let extractorPromise: Promise<any> | null = null;
 
 /**
  * Returns the local HuggingFace/Xenova feature-extraction pipeline instance.
- * Lazily loaded to avoid overhead when RAG is not invoked.
+ * Lazily loaded and deduplicated — concurrent calls share one initialization promise.
  */
 async function getExtractor() {
-  if (!extractor) {
-    const { pipeline } = await import('@xenova/transformers');
-    // Loads all-MiniLM-L6-v2 model (384 dimensions)
-    extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+  if (extractor) return extractor;
+  // Deduplicate: if init is already in progress, wait for it
+  if (!extractorPromise) {
+    extractorPromise = (async () => {
+      const { pipeline } = await import('@xenova/transformers');
+      extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+      return extractor;
+    })();
   }
-  return extractor;
+  return extractorPromise;
 }
 
 /**
@@ -180,6 +185,9 @@ export async function indexRepository(
 export async function searchRepository(query: string, limit: number = 3): Promise<Array<{ text: string; filePath: string; startLine: number; score?: number }>> {
   const APOS_DIR = process.env.APOS_DIR || process.cwd();
   const DB_DIR = path.join(APOS_DIR, 'data/vectordb');
+
+  // Clamp limit to safe range
+  const safeLimit = Math.max(1, Math.min(limit, 50));
   
   if (!fs.existsSync(DB_DIR)) {
     return [];
@@ -197,7 +205,7 @@ export async function searchRepository(query: string, limit: number = 3): Promis
     }
     
     const table = await db.openTable('code_chunks');
-    const results = await table.search(queryVector).limit(limit).toArray();
+    const results = await table.search(queryVector).limit(safeLimit).toArray();
     
     const mappedResults = results.map((r: any) => ({
       text: r.text,

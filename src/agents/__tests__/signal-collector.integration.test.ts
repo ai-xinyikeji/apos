@@ -17,10 +17,18 @@
 
 import { SignalCollectorAgent } from '../signal-collector';
 import { db } from '@/lib/db';
+import { getExtProxyStore } from '@/lib/ext-proxy-store';
 
 // ── Static mocks ──────────────────────────────────────────────────────────────
 
 jest.mock('@/lib/db');
+jest.mock('@/lib/ext-proxy-store', () => ({
+  getExtProxyStore: jest.fn(() => ({
+    isExtensionOnline: jest.fn().mockReturnValue(false),
+    dispatch: jest.fn(),
+    dispatchStreaming: jest.fn(),
+  })),
+}));
 jest.mock('@/lib/discovery/social', () => ({
   socialListener: {
     syncToDatabase: jest.fn().mockResolvedValue(0),
@@ -285,38 +293,25 @@ describe('SignalCollectorAgent — Google Gemini API integration', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('SignalCollectorAgent — Gemini Web (cookie-based) integration', () => {
-  const FAKE_COOKIES = 'SID=test-sid; HSID=test-hsid; SSID=test-ssid;';
+  let mockDispatch: jest.Mock;
+  let mockGetExtProxyStore: jest.Mock;
 
   beforeEach(() => {
-    // Gemini Web model config (isWebModel flag)
+    mockDispatch = jest.fn();
+    mockGetExtProxyStore = getExtProxyStore as jest.Mock;
+    mockGetExtProxyStore.mockReturnValue({
+      isExtensionOnline: jest.fn().mockReturnValue(true),
+      dispatch: mockDispatch,
+      dispatchStreaming: jest.fn(),
+    });
     mockLLMProvider({
       provider: 'web',
-      model: { isWebModel: true, type: 'gemini', cookies: FAKE_COOKIES },
+      model: { isWebModel: true, type: 'gemini' },
     });
-
-    // Ext proxy store: always report extension as offline so we fall through to direct request
-    jest.mock('@/lib/ext-proxy-store', () => ({
-      getExtProxyStore: () => ({
-        isExtensionOnline: () => false,
-        dispatch: jest.fn(),
-      }),
-    }));
   });
 
-  it('collects signals when Gemini Web returns a valid batchexecute response', async () => {
-    (global.fetch as jest.Mock)
-      // 1st call: GET gemini.google.com/app → HTML with SNlM0e token
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        text: async () => GEMINI_APP_HTML,
-      })
-      // 2nd call: POST batchexecute → valid response
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        text: async () => makeGeminiWebResponse(VALID_LLM_RESPONSE_TEXT),
-      });
+  it('collects signals when Gemini Web returns a valid response via ExtProxy', async () => {
+    mockDispatch.mockResolvedValue({ taskId: 'task_1', text: VALID_LLM_RESPONSE_TEXT });
 
     const result = await agent.run({}, MOCK_RUN_ID);
 
@@ -324,13 +319,8 @@ describe('SignalCollectorAgent — Gemini Web (cookie-based) integration', () =>
     expect(result.count).toBe(2);
   });
 
-  it('returns failure when Gemini page does not contain SNlM0e token (expired cookies)', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      // HTML without SNlM0e — simulates expired/invalid cookies
-      text: async () => '<html><body>Sign in to continue</body></html>',
-    });
+  it('returns failure when ExtProxy dispatch returns an error', async () => {
+    mockDispatch.mockResolvedValue({ taskId: 'task_1', error: 'Extension offline' });
 
     const result = await agent.run({}, MOCK_RUN_ID);
 
@@ -338,13 +328,8 @@ describe('SignalCollectorAgent — Gemini Web (cookie-based) integration', () =>
     expect(result.count).toBe(0);
   });
 
-  it('returns failure when Gemini page fetch returns HTTP 403', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 403,
-      statusText: 'Forbidden',
-      text: async () => 'Forbidden',
-    });
+  it('returns failure when ExtProxy dispatch throws', async () => {
+    mockDispatch.mockRejectedValue(new Error('Extension timed out'));
 
     const result = await agent.run({}, MOCK_RUN_ID);
 
@@ -352,19 +337,8 @@ describe('SignalCollectorAgent — Gemini Web (cookie-based) integration', () =>
     expect(result.count).toBe(0);
   });
 
-  it('returns failure when batchexecute response contains no XqA3Ic line (API structure changed)', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        text: async () => GEMINI_APP_HTML,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        // Response body with no XqA3Ic line → extractGeminiText returns '' → empty response error
-        text: async () => ')]}\'\n[["wrb.fr",null,null,null,0]]',
-      });
+  it('returns failure when ExtProxy returns empty text', async () => {
+    mockDispatch.mockResolvedValue({ taskId: 'task_1', text: '' });
 
     const result = await agent.run({}, MOCK_RUN_ID);
 
@@ -372,41 +346,17 @@ describe('SignalCollectorAgent — Gemini Web (cookie-based) integration', () =>
     expect(result.count).toBe(0);
   });
 
-  it('returns failure when batchexecute returns HTTP 429', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        text: async () => GEMINI_APP_HTML,
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 429,
-        statusText: 'Too Many Requests',
-        text: async () => 'Too Many Requests',
-      });
+  it('returns failure when ExtProxy returns malformed JSON', async () => {
+    mockDispatch.mockResolvedValue({ taskId: 'task_1', text: 'not valid json' });
 
     const result = await agent.run({}, MOCK_RUN_ID);
 
     expect(result.success).toBe(false);
     expect(result.count).toBe(0);
-  });
-
-  it('returns failure when cookies are empty string', async () => {
-    // Override getLLM to return empty cookies
-    jest.spyOn(agent as any, 'getLLM').mockResolvedValue({
-      provider: 'web',
-      model: { isWebModel: true, type: 'gemini', cookies: '' },
-    });
-
-    const result = await agent.run({}, MOCK_RUN_ID);
-
-    expect(result.success).toBe(false);
-    expect(result.count).toBe(0);
-    // fetch should never be called — error thrown before any network request
-    expect(global.fetch).not.toHaveBeenCalled();
   });
 });
+;
+;
 
 // ─────────────────────────────────────────────────────────────────────────────
 

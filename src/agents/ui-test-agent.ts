@@ -4,7 +4,6 @@
  */
 
 import { BaseAgent } from './base';
-import { generateText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { COMMON_STEPS } from '@/lib/progress-tracker';
 
@@ -155,11 +154,11 @@ export class UITestAgent extends BaseAgent<UITestInput, UITestOutput> {
     runId: string
   ): Promise<TestResult> {
     try {
-      // 检查是否支持 Computer Use
-      const { model } = await this.getLLM();
-      
+      // Single getLLM() call — reuse for both model check and callLLM
+      const llm = await this.getLLM();
+
       // 如果不是 Claude 模型，使用模拟测试
-      if (!model.modelId.includes('claude')) {
+      if (!llm.model.modelId?.includes('claude')) {
         await this.trace(
           runId,
           'computer_use_fallback',
@@ -170,18 +169,12 @@ export class UITestAgent extends BaseAgent<UITestInput, UITestOutput> {
       }
 
       // 使用 Claude Computer Use
-      const result = await this.safeLLMCall(
-        runId,
-        'computer_use',
-        async () => {
-          const claudeModel = anthropic('claude-3-5-sonnet-20241022');
-
-          return await generateText({
-            model: claudeModel,
-            messages: [
-              {
-                role: 'user',
-                content: `请在浏览器中测试以下场景:
+      const claudeModel = anthropic('claude-3-5-sonnet-20241022');
+      const result = await this.callLLM(runId, { ...llm, model: claudeModel }, {
+        messages: [
+          {
+            role: 'user',
+            content: `请在浏览器中测试以下场景:
                 
 URL: ${input.url}
 测试用例: ${testCase}
@@ -193,22 +186,20 @@ URL: ${input.url}
 4. 截图记录
 
 返回 JSON 格式的测试结果。`,
-              },
-            ],
-            // Computer Use 工具配置
-            // 注意: 这需要 Claude API 的特殊权限
-            // tools: [
-            //   {
-            //     type: 'computer_20241022',
-            //     name: 'computer',
-            //     display_width_px: input.viewport?.width || 1920,
-            //     display_height_px: input.viewport?.height || 1080,
-            //     display_number: 1,
-            //   },
-            // ],
-          });
-        }
-      );
+          },
+        ],
+        // Computer Use 工具配置
+        // 注意: 这需要 Claude API 的特殊权限
+        // tools: [
+        //   {
+        //     type: 'computer_20241022',
+        //     name: 'computer',
+        //     display_width_px: input.viewport?.width || 1920,
+        //     display_height_px: input.viewport?.height || 1080,
+        //     display_number: 1,
+        //   },
+        // ],
+      });
 
       // 解析结果
       try {
@@ -260,18 +251,13 @@ URL: ${input.url}
     results: TestResult[],
     runId: string
   ): Promise<string> {
-    const { model } = await this.getLLM();
+    const llm = await this.getLLM();
 
-    const result = await this.safeLLMCall(
-      runId,
-      'generate_report',
-      async () => {
-        return await generateText({
-          model,
-          messages: [
-            {
-              role: 'user',
-              content: `请根据以下 UI 测试结果生成详细的测试报告:
+    const result = await this.callLLM(runId, llm, {
+      messages: [
+        {
+          role: 'user',
+          content: `请根据以下 UI 测试结果生成详细的测试报告:
 
 ${JSON.stringify(results, null, 2)}
 
@@ -282,11 +268,9 @@ ${JSON.stringify(results, null, 2)}
 4. 改进建议
 
 使用 Markdown 格式。`,
-            },
-          ],
-        });
-      }
-    );
+        },
+      ],
+    });
 
     return result.text;
   }

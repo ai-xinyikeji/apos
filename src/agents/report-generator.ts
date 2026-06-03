@@ -2,7 +2,6 @@ import { BaseAgent } from './base';
 import { db } from '@/lib/db';
 import { signals } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
-import { generateText } from '@/lib/llm';
 import fs from 'fs';
 import path from 'path';
 
@@ -81,8 +80,7 @@ ${signalsListText || '（目前数据库无新增用户反馈信号）'}
 ${marketContext}
 `;
 
-      const { text, usage } = await generateText({
-        model: llm.model,
+      const { text, usage } = await this.callLLM(runId, llm, {
         prompt,
       });
 

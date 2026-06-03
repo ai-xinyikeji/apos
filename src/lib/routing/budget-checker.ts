@@ -82,7 +82,8 @@ export class BudgetChecker {
     const percentageUsed = budgetLimit > 0
       ? (projectedSpend / budgetLimit) * 100
       : 0;
-    const withinBudget = projectedSpend <= budgetLimit;
+    // If budgetLimit is 0, it means no limit is configured (unlimited budget)
+    const withinBudget = budgetLimit === 0 || projectedSpend <= budgetLimit;
 
     let recommendedModel: string | undefined;
     if (!withinBudget && originalModel) {

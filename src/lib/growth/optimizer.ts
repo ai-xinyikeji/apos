@@ -89,8 +89,10 @@ Provide your suggestions as a JSON block with:
 1. An overall analysis text.
 2. A list of code replacements containing originalCodeSnippet and optimizedCodeSnippet.
 
-Output format:
-\`\`\`json
+IMPORTANT: Return ONLY a valid JSON object, without any markdown code blocks or extra formatting.
+Do NOT wrap the JSON in \`\`\`json or \`\`\` markers.
+
+Expected output format (return exactly in this format):
 {
   "analysis": "... detailed analysis ...",
   "codeSuggestions": [
@@ -102,19 +104,73 @@ Output format:
     }
   ]
 }
-\`\`\`
 `;
 
     try {
-      const activeClient = await getLLMClientForOptimizer();
-      const { text } = await generateText({
-        model: activeClient.model,
-        prompt,
-      });
+      let activeClient = await getLLMClientForOptimizer();
+      let text: string;
+      try {
+        const result = await generateText({
+          model: activeClient.model,
+          prompt,
+        });
+        text = result.text;
+      } catch (llmErr: any) {
+        const msg: string = llmErr?.message || '';
+        const is404 = msg === 'Not Found' || msg === '404' || msg.startsWith('404 ') || llmErr?.status === 404 || llmErr?.statusCode === 404;
+        if (is404) {
+          console.warn('[UIOptimizer] Primary model 404, switching to fallback...');
+          const { routeModel } = await import('../llm');
+          activeClient = await routeModel('default');
+          const result = await generateText({ model: activeClient.model, prompt });
+          text = result.text;
+        } else {
+          throw llmErr;
+        }
+      }
 
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || [null, text];
-      const jsonStr = jsonMatch[1]?.trim() || text.trim();
-      const parsed = JSON.parse(jsonStr);
+      // Parse JSON from text - handle multiple formats
+      let jsonStr = text.trim();
+      
+      // Remove markdown code blocks if present (handles ```json, ```, and other variations)
+      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1].trim();
+      }
+      
+      // Remove any leading/trailing whitespace or newlines
+      jsonStr = jsonStr.trim();
+      
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonStr);
+        
+        // Validate structure
+        if (!parsed.analysis || typeof parsed.analysis !== 'string') {
+          throw new Error('Missing or invalid "analysis" field in LLM response');
+        }
+        
+        // Ensure codeSuggestions is an array
+        if (!Array.isArray(parsed.codeSuggestions)) {
+          console.warn('codeSuggestions is not an array, setting to empty array');
+          parsed.codeSuggestions = [];
+        }
+        
+        // Validate each code suggestion
+        for (const suggestion of parsed.codeSuggestions) {
+          if (!suggestion.description || !suggestion.originalCodeSnippet || !suggestion.optimizedCodeSnippet) {
+            console.warn('Invalid code suggestion detected, missing required fields:', suggestion);
+          }
+          // Auto-fill filePath if missing
+          if (!suggestion.filePath) {
+            suggestion.filePath = filePath;
+          }
+        }
+        
+      } catch (parseErr: any) {
+        console.error('JSON parsing failed. Raw LLM response:', text);
+        throw new Error(`LLM generated invalid JSON structure: ${parseErr.message}`);
+      }
 
       return {
         componentName,

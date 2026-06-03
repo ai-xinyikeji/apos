@@ -1,5 +1,4 @@
 import { BaseAgent } from './base';
-import { generateText } from '@/lib/llm';
 
 export interface ArchitectInput {
   requirements: string;
@@ -79,11 +78,9 @@ export class ArchitectAgent extends BaseAgent<ArchitectInput, ArchitectOutput> {
       // 尝试使用 Extended Thinking
       if (llm.provider === 'anthropic') {
         try {
-          const result = await generateText({
-            model: llm.model,
+          const result = await this.callLLM(runId, llm, {
             maxTokens: 16000,
             temperature: 1.0,
-            // 启用 Extended Thinking
             experimental_thinkingBudget: 10000,
             messages: [
               {
@@ -115,8 +112,7 @@ export class ArchitectAgent extends BaseAgent<ArchitectInput, ArchitectOutput> {
           );
 
           // 回退到标准模式
-          const result = await generateText({
-            model: llm.model,
+          const result = await this.callLLM(runId, llm, {
             maxTokens: 8192,
             temperature: 0.7,
             messages: [
@@ -131,8 +127,7 @@ export class ArchitectAgent extends BaseAgent<ArchitectInput, ArchitectOutput> {
         }
       } else {
         // 非 Claude Provider 使用标准模式
-        const result = await generateText({
-          model: llm.model,
+        const result = await this.callLLM(runId, llm, {
           maxTokens: 8192,
           temperature: 0.7,
           messages: [

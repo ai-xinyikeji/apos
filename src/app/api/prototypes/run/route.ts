@@ -28,6 +28,12 @@ export async function POST(req: Request) {
     if (image && !image.startsWith('data:image/')) {
       throw new ValidationError('image 必须是有效的 Base64 Data URL (data:image/...)');
     }
+
+    // Limit image size to 5MB (base64 ~= 4/3 of binary, so 5MB binary ≈ 6.7MB base64)
+    const MAX_IMAGE_BASE64_SIZE = 7 * 1024 * 1024; // 7MB base64 chars
+    if (image && image.length > MAX_IMAGE_BASE64_SIZE) {
+      throw new ValidationError('image 文件过大，最大支持 5MB');
+    }
     
     // Retrieve prototype
     const [proto] = await db.select().from(prototypes).where(eq(prototypes.id, prototypeId));

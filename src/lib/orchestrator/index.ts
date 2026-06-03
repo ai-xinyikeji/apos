@@ -117,12 +117,21 @@ export class Orchestrator {
     // Custom database workflows
     try {
       const customList = await db.select().from(dbWorkflows);
-      const customWorkflows = customList.map(w => ({
-        name: w.name,
-        description: w.description,
-        tasks: JSON.parse(w.tasks) as Omit<Task, 'status'>[],
-        isCustom: true,
-      }));
+      const customWorkflows = customList.map(w => {
+        let tasks: Omit<Task, 'status'>[] = [];
+        try {
+          tasks = JSON.parse(w.tasks) as Omit<Task, 'status'>[];
+        } catch {
+          console.error(`[Orchestrator] Failed to parse tasks for workflow "${w.name}", skipping`);
+          return null;
+        }
+        return {
+          name: w.name,
+          description: w.description,
+          tasks,
+          isCustom: true,
+        };
+      }).filter(Boolean) as WorkflowDefinition[];
       
       return [...systemWorkflows, ...customWorkflows];
     } catch (error) {

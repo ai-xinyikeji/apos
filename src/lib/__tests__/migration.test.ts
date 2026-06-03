@@ -60,7 +60,7 @@ function applyMigrations(sqlite: InstanceType<typeof Database>) {
 }
 
 describe('Database Migration Tests', () => {
-  let testDbPath: string;
+  let testDbPath: string | undefined;
   let sqlite: InstanceType<typeof Database>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let db: any;

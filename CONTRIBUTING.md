@@ -1,411 +1,408 @@
-# 贡献指南
+# Contributing to APOS
 
-感谢您对 APOS 项目的关注！我们欢迎所有形式的贡献。
+First off, thank you for considering contributing to APOS! It's people like you that make APOS such a great tool.
 
-## 行为准则
+## 📋 Table of Contents
 
-参与本项目即表示您同意遵守我们的行为准则：
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [How Can I Contribute?](#how-can-i-contribute)
+- [Development Process](#development-process)
+- [Style Guidelines](#style-guidelines)
+- [Commit Messages](#commit-messages)
+- [Pull Request Process](#pull-request-process)
 
-- 尊重所有贡献者
-- 接受建设性批评
-- 关注对社区最有利的事情
-- 对其他社区成员表现出同理心
+## Code of Conduct
 
-## 如何贡献
+This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
-### 报告 Bug
+## Getting Started
 
-如果您发现了 Bug，请创建一个 Issue 并包含：
+### Prerequisites
 
-1. **清晰的标题**: 简洁描述问题
-2. **复现步骤**: 详细的步骤说明
-3. **期望行为**: 您期望发生什么
-4. **实际行为**: 实际发生了什么
-5. **环境信息**: 
-   - 操作系统
-   - Node.js 版本
-   - npm/pnpm 版本
-6. **截图/日志**: 如果适用
+- Node.js 20+ and npm
+- Git
+- Basic knowledge of TypeScript/React
+- Familiarity with Next.js is helpful
 
-**Bug 报告模板**:
+### Setting Up Development Environment
 
-```markdown
-## Bug 描述
-简洁清晰地描述 Bug
+1. **Fork the repository** on GitHub
 
-## 复现步骤
-1. 访问 '...'
-2. 点击 '...'
-3. 滚动到 '...'
-4. 看到错误
-
-## 期望行为
-清晰描述您期望发生什么
-
-## 实际行为
-清晰描述实际发生了什么
-
-## 截图
-如果适用，添加截图帮助解释问题
-
-## 环境
-- OS: [e.g. macOS 14.0]
-- Node.js: [e.g. 20.10.0]
-- Browser: [e.g. Chrome 120]
-
-## 额外信息
-添加任何其他相关信息
-```
-
-### 提出新功能
-
-如果您有新功能的想法，请创建一个 Issue 并包含：
-
-1. **功能描述**: 清晰描述功能
-2. **使用场景**: 为什么需要这个功能
-3. **建议实现**: 您认为如何实现（可选）
-4. **替代方案**: 您考虑过的其他方案（可选）
-
-**功能请求模板**:
-
-```markdown
-## 功能描述
-清晰简洁地描述您想要的功能
-
-## 问题背景
-这个功能解决什么问题？
-
-## 建议方案
-描述您希望如何实现
-
-## 替代方案
-描述您考虑过的其他方案
-
-## 额外信息
-添加任何其他相关信息或截图
-```
-
-### 提交代码
-
-#### 开发环境设置
-
-1. **Fork 仓库**
-
-```bash
-# 在 GitHub 上点击 Fork 按钮
-```
-
-2. **克隆您的 Fork**
-
+2. **Clone your fork**:
 ```bash
 git clone https://github.com/YOUR_USERNAME/apos.git
 cd apos
 ```
 
-3. **添加上游仓库**
-
+3. **Add upstream remote**:
 ```bash
-git remote add upstream https://github.com/ORIGINAL_OWNER/apos.git
+git remote add upstream https://github.com/ai-xinyikeji/apos.git
 ```
 
-4. **安装依赖**
-
+4. **Install dependencies**:
 ```bash
 npm install
 ```
 
-5. **配置环境变量**
-
-```bash
-cp .env.example .env.local
-# 编辑 .env.local 添加您的 API Keys
-```
-
-6. **初始化数据库**
-
+5. **Initialize database**:
 ```bash
 npm run db:push
 ```
 
-7. **启动开发服务器**
+6. **Create `.env.local`** (see `.env.example`)
 
+7. **Start development server**:
 ```bash
 npm run dev
 ```
 
-#### 开发流程
+## How Can I Contribute?
 
-1. **创建分支**
+### 🐛 Reporting Bugs
 
+Before creating bug reports, please check the issue list as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible:
+
+- **Use a clear and descriptive title**
+- **Describe the exact steps to reproduce the problem**
+- **Provide specific examples**
+- **Describe the behavior you observed and what you expected**
+- **Include screenshots if relevant**
+- **Include your environment details** (OS, Node version, etc.)
+
+### 💡 Suggesting Enhancements
+
+Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, please include:
+
+- **Use a clear and descriptive title**
+- **Provide a detailed description of the suggested enhancement**
+- **Explain why this enhancement would be useful**
+- **List some examples of how it would be used**
+
+### 🔧 Your First Code Contribution
+
+Unsure where to begin? You can start by looking through these issues:
+
+- **Good First Issue** - issues that should only require a few lines of code
+- **Help Wanted** - issues that are a bit more involved
+
+### 📝 Improving Documentation
+
+Documentation improvements are always welcome! This includes:
+
+- Fixing typos or grammatical errors
+- Adding examples or clarifications
+- Translating documentation
+- Creating tutorials or guides
+
+## Development Process
+
+### Branch Naming Convention
+
+- `feature/description` - New features
+- `fix/description` - Bug fixes
+- `docs/description` - Documentation changes
+- `refactor/description` - Code refactoring
+- `test/description` - Adding or updating tests
+
+### Development Workflow
+
+1. **Create a branch**:
 ```bash
-git checkout -b feature/your-feature-name
-# 或
-git checkout -b fix/your-bug-fix
+git checkout -b feature/amazing-feature
 ```
 
-分支命名规范：
-- `feature/` - 新功能
-- `fix/` - Bug 修复
-- `docs/` - 文档更新
-- `refactor/` - 代码重构
-- `test/` - 测试相关
-- `chore/` - 构建/工具相关
+2. **Make your changes** following our style guidelines
 
-2. **编写代码**
+3. **Write or update tests** for your changes
 
-遵循项目的编码规范（见下文）
-
-3. **测试您的更改**
-
+4. **Run tests**:
 ```bash
-# 运行 linter
+npm test
+npm run type-check
 npm run lint
-
-# 构建项目
-npm run build
-
-# 手动测试功能
-npm run dev
 ```
 
-4. **提交更改**
+5. **Commit your changes** following our commit message guidelines
+
+6. **Push to your fork**:
+```bash
+git push origin feature/amazing-feature
+```
+
+7. **Create a Pull Request** from your fork to our `main` branch
+
+### Keep Your Fork Updated
 
 ```bash
-git add .
-git commit -m "feat: add user authentication"
+git fetch upstream
+git checkout main
+git merge upstream/main
 ```
 
-提交信息规范（遵循 Conventional Commits）：
+## Style Guidelines
 
-- `feat:` - 新功能
-- `fix:` - Bug 修复
-- `docs:` - 文档更新
-- `style:` - 代码格式（不影响功能）
-- `refactor:` - 代码重构
-- `test:` - 测试相关
-- `chore:` - 构建/工具相关
-- `perf:` - 性能优化
+### TypeScript Style Guide
 
-示例：
-```
-feat: add RAG vector search for code reuse
-fix: resolve compilation error in ProtoBuilder
-docs: update API documentation for settings endpoint
-refactor: extract LLM service to separate module
-```
+We follow standard TypeScript best practices:
 
-5. **推送到您的 Fork**
+- **Use TypeScript**: No plain JavaScript in `src/`
+- **Type everything**: Avoid `any`, use proper types
+- **Use interfaces** for object shapes
+- **Use enums** for constant values
+- **Prefer const** over let when possible
+- **Use async/await** over promises chains
 
-```bash
-git push origin feature/your-feature-name
-```
-
-6. **创建 Pull Request**
-
-- 访问 GitHub 上您的 Fork
-- 点击 "New Pull Request"
-- 填写 PR 描述（见下文模板）
-- 提交 PR
-
-#### Pull Request 模板
-
-```markdown
-## 变更类型
-- [ ] Bug 修复
-- [ ] 新功能
-- [ ] 重大变更
-- [ ] 文档更新
-
-## 变更描述
-清晰描述您的更改
-
-## 相关 Issue
-Closes #123
-
-## 测试
-描述您如何测试了这些更改
-
-## 截图（如适用）
-添加截图展示 UI 变更
-
-## 检查清单
-- [ ] 代码遵循项目编码规范
-- [ ] 已运行 `npm run lint` 无错误
-- [ ] 已运行 `npm run build` 成功
-- [ ] 已手动测试所有更改
-- [ ] 已更新相关文档
-- [ ] 提交信息遵循规范
-```
-
-## 编码规范
-
-### TypeScript/JavaScript
-
-1. **使用 TypeScript**: 所有新代码必须使用 TypeScript
-2. **类型安全**: 避免使用 `any`，优先使用具体类型
-3. **命名规范**:
-   - 变量/函数: `camelCase`
-   - 类/接口: `PascalCase`
-   - 常量: `UPPER_SNAKE_CASE`
-   - 文件名: `kebab-case.ts` 或 `PascalCase.tsx`（组件）
-
-4. **函数规范**:
-   - 优先使用箭头函数
-   - 函数应该简短且单一职责
-   - 添加 JSDoc 注释（复杂函数）
-
+**Example**:
 ```typescript
-// ✅ 好的示例
+// ✅ Good
 interface UserData {
   id: number;
   name: string;
   email: string;
 }
 
-const fetchUser = async (userId: number): Promise<UserData> => {
-  const response = await fetch(`/api/users/${userId}`);
+async function fetchUser(id: number): Promise<UserData> {
+  const response = await fetch(`/api/users/${id}`);
   return response.json();
-};
-
-// ❌ 不好的示例
-const fetchUser = async (userId: any) => {
-  const response = await fetch(`/api/users/${userId}`);
-  return response.json();
-};
-```
-
-### React 组件
-
-1. **函数组件**: 使用函数组件，不使用类组件
-2. **Hooks**: 遵循 Hooks 规则
-3. **Props 类型**: 明确定义 Props 接口
-4. **Server/Client 组件**: 
-   - 默认使用 Server Components
-   - 仅在需要交互时使用 `'use client'`
-
-```typescript
-// ✅ 好的示例
-interface ButtonProps {
-  label: string;
-  onClick: () => void;
-  variant?: 'primary' | 'secondary';
 }
 
-export const Button = ({ label, onClick, variant = 'primary' }: ButtonProps) => {
+// ❌ Bad
+async function fetchUser(id: any) {
+  const response = await fetch(`/api/users/${id}`);
+  return response.json();
+}
+```
+
+### React/Next.js Style Guide
+
+- **Use functional components** with hooks
+- **Use server components** by default (Next.js 14+)
+- **Add 'use client'** only when necessary
+- **Extract reusable logic** into custom hooks
+- **Use shadcn/ui** components when available
+- **Follow component structure**:
+
+```typescript
+'use client'; // Only if needed
+
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+
+interface MyComponentProps {
+  title: string;
+  onAction: () => void;
+}
+
+export function MyComponent({ title, onAction }: MyComponentProps) {
+  const [loading, setLoading] = useState(false);
+  
+  // Handler functions
+  const handleClick = async () => {
+    setLoading(true);
+    await onAction();
+    setLoading(false);
+  };
+  
+  // Render
   return (
-    <button onClick={onClick} className={cn('btn', `btn-${variant}`)}>
-      {label}
-    </button>
+    <div>
+      <h1>{title}</h1>
+      <Button onClick={handleClick} disabled={loading}>
+        {loading ? 'Loading...' : 'Click Me'}
+      </Button>
+    </div>
   );
-};
-
-// ❌ 不好的示例
-export const Button = (props: any) => {
-  return <button onClick={props.onClick}>{props.label}</button>;
-};
+}
 ```
 
-### CSS/Tailwind
+### File Naming
 
-1. **使用 Tailwind**: 优先使用 Tailwind 类
-2. **组件变体**: 使用 CVA (Class Variance Authority)
-3. **响应式**: 考虑移动端适配
-4. **深色主题**: 使用 slate 色系
+- **Components**: PascalCase (e.g., `MyComponent.tsx`)
+- **Utilities**: camelCase (e.g., `formatDate.ts`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `API_ENDPOINTS.ts`)
+- **Types**: PascalCase with `.types.ts` suffix
 
-```typescript
-// ✅ 好的示例
-<div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-6 hover:border-slate-700/50 transition-colors">
-  <h3 className="text-slate-200 font-semibold">标题</h3>
-</div>
-
-// ❌ 不好的示例
-<div style={{ borderRadius: '16px', border: '1px solid #1e293b' }}>
-  <h3>标题</h3>
-</div>
-```
-
-### 数据库
-
-1. **使用 Drizzle ORM**: 不直接写 SQL
-2. **类型安全**: 利用 Drizzle 的类型推断
-3. **事务**: 复杂操作使用事务
-
-```typescript
-// ✅ 好的示例
-const [prototype] = await db
-  .select()
-  .from(prototypes)
-  .where(eq(prototypes.id, prototypeId));
-
-// ❌ 不好的示例
-const prototype = await db.run('SELECT * FROM prototypes WHERE id = ?', [prototypeId]);
-```
-
-### Git 提交
-
-1. **原子提交**: 每个提交应该是一个逻辑单元
-2. **清晰的消息**: 遵循 Conventional Commits
-3. **避免大文件**: 不提交 node_modules、.env 等
-
-## 项目结构
-
-添加新功能时，请遵循现有的项目结构：
+### Code Organization
 
 ```
 src/
-├── agents/           # 添加新 Agent
-├── app/
-│   ├── api/          # 添加新 API 路由
-│   └── [page]/       # 添加新页面
-├── components/
-│   └── ui/           # 添加新 UI 组件
-└── lib/              # 添加新工具函数
+├── app/              # Next.js pages
+├── components/       # React components
+│   ├── ui/          # shadcn/ui components
+│   └── features/    # Feature-specific components
+├── lib/             # Core libraries
+├── agents/          # AI Agents
+├── types/           # TypeScript types
+└── utils/           # Utility functions
 ```
 
-## 测试
+## Commit Messages
 
-虽然当前项目没有测试，但我们鼓励添加测试：
+We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-1. **单元测试**: 测试独立函数和组件
-2. **集成测试**: 测试 API 端点
-3. **E2E 测试**: 测试完整用户流程
+### Format
 
-未来将添加测试框架（Jest + React Testing Library）。
+```
+<type>(<scope>): <subject>
 
-## 文档
+<body>
 
-更新代码时，请同步更新文档：
+<footer>
+```
 
-- **README.md**: 功能概览和快速开始
-- **ARCHITECTURE.md**: 架构设计
-- **API.md**: API 端点
-- **代码注释**: 复杂逻辑添加注释
+### Types
 
-## 发布流程
+- **feat**: A new feature
+- **fix**: A bug fix
+- **docs**: Documentation only changes
+- **style**: Changes that don't affect code meaning (formatting, etc.)
+- **refactor**: Code change that neither fixes a bug nor adds a feature
+- **perf**: Performance improvement
+- **test**: Adding or updating tests
+- **chore**: Changes to build process or auxiliary tools
 
-项目维护者负责发布新版本：
+### Examples
 
-1. 更新版本号（`package.json`）
-2. 更新 CHANGELOG.md
-3. 创建 Git tag
-4. 发布到 npm（如适用）
+```bash
+# Feature
+feat(agents): add context compression to ProtoBuilder
 
-## 获取帮助
+Implements AST-based compression for TypeScript files
+with automatic fallback to LLM-based compression.
 
-如果您有任何问题：
+Closes #123
 
-1. 查看现有 Issues
-2. 阅读文档（README、ARCHITECTURE、API）
-3. 创建新 Issue 提问
+# Bug fix
+fix(api): resolve 404 error in signal collection
 
-## 许可证
+The SignalCollector was not using the unified callLLM
+method, causing 404 errors when the primary model failed.
 
-提交代码即表示您同意将代码以 MIT 许可证发布。
+Fixes #456
 
-## 致谢
+# Documentation
+docs(readme): add installation instructions for Windows
 
-感谢所有贡献者！您的贡献让 APOS 变得更好。
+Added Windows-specific setup steps and troubleshooting
+guide for common issues.
+```
+
+### Best Practices
+
+- Use present tense ("add feature" not "added feature")
+- Use imperative mood ("move cursor to..." not "moves cursor to...")
+- Limit first line to 72 characters
+- Reference issues and pull requests after first line
+- Provide detailed explanation in body for complex changes
+
+## Pull Request Process
+
+### Before Submitting
+
+1. ✅ **Update documentation** if needed
+2. ✅ **Add tests** for new features
+3. ✅ **Run all tests** and ensure they pass
+4. ✅ **Run linter** and fix any issues
+5. ✅ **Update CHANGELOG.md** (if applicable)
+6. ✅ **Rebase on latest main** branch
+
+### PR Description Template
+
+```markdown
+## Description
+Brief description of what this PR does
+
+## Type of Change
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
+
+## How Has This Been Tested?
+Describe the tests you ran
+
+## Checklist
+- [ ] My code follows the style guidelines
+- [ ] I have performed a self-review
+- [ ] I have commented my code where necessary
+- [ ] I have updated the documentation
+- [ ] My changes generate no new warnings
+- [ ] I have added tests that prove my fix/feature works
+- [ ] New and existing unit tests pass locally
+
+## Screenshots (if applicable)
+Add screenshots to help explain your changes
+
+## Related Issues
+Closes #(issue number)
+```
+
+### Review Process
+
+1. **At least one approval** required from maintainers
+2. **All CI checks must pass**
+3. **No merge conflicts** with main branch
+4. **Code quality** standards met
+5. **Tests coverage** maintained or improved
+
+### After PR is Merged
+
+1. **Delete your branch** (both local and remote)
+2. **Update your local main** branch
+3. **Close related issues** if not automatically closed
+
+## Testing Guidelines
+
+### Unit Tests
+
+- Write tests for all new features
+- Test edge cases and error conditions
+- Use descriptive test names
+- Follow AAA pattern (Arrange, Act, Assert)
+
+```typescript
+describe('ProtoBuilder Agent', () => {
+  it('should compress context when size exceeds threshold', async () => {
+    // Arrange
+    const agent = new ProtoBuilderAgent();
+    const largeContext = 'x'.repeat(10000);
+    
+    // Act
+    const result = await agent.compressContext(largeContext);
+    
+    // Assert
+    expect(result.length).toBeLessThan(largeContext.length);
+    expect(result).toContain('compressed');
+  });
+});
+```
+
+### Integration Tests
+
+- Test complete workflows
+- Test API endpoints
+- Test database operations
+- Test agent interactions
+
+## Questions?
+
+Feel free to:
+- Open an issue with the `question` label
+- Start a discussion in GitHub Discussions
+- Reach out to maintainers
+
+## Recognition
+
+Contributors will be:
+- Listed in CONTRIBUTORS.md
+- Acknowledged in release notes
+- Invited to become maintainers (for significant contributions)
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.
 
 ---
 
-**Happy Coding! 🚀**
+Thank you for contributing to APOS! 🎉

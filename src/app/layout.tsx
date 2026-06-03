@@ -30,6 +30,7 @@ export default function RootLayout({
     <html
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="h-full bg-slate-950 text-slate-100 antialiased overflow-hidden font-sans" suppressHydrationWarning>
         <ToastProvider>

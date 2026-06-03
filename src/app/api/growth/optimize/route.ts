@@ -20,6 +20,15 @@ export async function POST(request: NextRequest) {
     const absolutePath = path.isAbsolute(filePath) 
       ? filePath 
       : path.join(process.cwd(), filePath);
+
+    // Security: prevent path traversal outside project root
+    const projectRoot = process.cwd();
+    if (!absolutePath.startsWith(projectRoot + path.sep) && absolutePath !== projectRoot) {
+      return NextResponse.json(
+        { success: false, error: 'Access denied: path is outside the project directory' },
+        { status: 403 }
+      );
+    }
       
     const result = await uiOptimizer.optimizeComponent(componentName, absolutePath);
     

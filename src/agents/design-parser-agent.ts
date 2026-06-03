@@ -4,7 +4,6 @@
  */
 
 import { BaseAgent } from './base';
-import { generateText } from '@/lib/llm';
 import { anthropic } from '@ai-sdk/anthropic';
 
 export interface DesignParserInput {
@@ -152,31 +151,27 @@ export class DesignParserAgent extends BaseAgent<DesignParserInput, DesignParser
     input: DesignParserInput,
     runId: string
   ): Promise<any> {
-    const { model } = await this.getLLM();
+    // Single getLLM() call — reuse for both model check and callLLM
+    const llm = await this.getLLM();
 
     // 确保使用支持多模态的模型
-    const multimodalModel = model.modelId.includes('claude')
+    const multimodalModel = llm.model.modelId?.includes('claude')
       ? anthropic('claude-3-5-sonnet-20241022')
-      : model;
+      : llm.model;
 
-    const result = await this.safeLLMCall(
-      runId,
-      'analyze_design',
-      async () => {
-        return await generateText({
-          model: multimodalModel,
-          messages: [
+    const result = await this.callLLM(runId, { ...llm, model: multimodalModel }, {
+      messages: [
+        {
+          role: 'user',
+          content: [
             {
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  image: input.imageBase64,
-                  mimeType: input.imageMimeType || 'image/png',
-                },
-                {
-                  type: 'text',
-                  text: `请详细分析这个设计稿，提取以下信息:
+              type: 'image',
+              image: input.imageBase64,
+              mimeType: input.imageMimeType || 'image/png',
+            },
+            {
+              type: 'text',
+              text: `请详细分析这个设计稿，提取以下信息:
 
 1. **布局结构**
    - 布局类型 (Flexbox/Grid/Absolute)
@@ -209,13 +204,11 @@ export class DesignParserAgent extends BaseAgent<DesignParserInput, DesignParser
    - 导航元素
 
 请以 JSON 格式返回结果，包含以上所有信息。`,
-                },
-              ],
             },
           ],
-        });
-      }
-    );
+        },
+      ],
+    });
 
     // 解析 JSON 结果
     try {

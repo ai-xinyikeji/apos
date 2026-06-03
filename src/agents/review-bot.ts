@@ -2,7 +2,6 @@ import { BaseAgent } from './base';
 import { db } from '@/lib/db';
 import { git, getRepoDetails } from '@/lib/git';
 import { settings } from '@/lib/schema';
-import { generateText } from '@/lib/llm';
 
 
 
@@ -95,8 +94,7 @@ Generate a detailed code review report in Markdown, including sections for:
       let usage: any;
 
       const auditPrompt = `${systemPrompt}\n${context}\n\n${userMessage}`;
-      const result = await generateText({
-        model: llm.model,
+      const result = await this.callLLM(runId, llm, {
         prompt: auditPrompt,
       });
 

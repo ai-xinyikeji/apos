@@ -53,6 +53,9 @@ next-env.d.ts
 .DS_Store?
 ._*
 Thumbs.db
+# IDE directories — never commit these
+.idea/
+.kiro/
 .vscode/settings.json
 .vscode/launch.json
 # Keep .vscode/extensions.json (useful for team)

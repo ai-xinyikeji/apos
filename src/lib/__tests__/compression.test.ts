@@ -15,15 +15,17 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 jest.mock('../llm', () => ({
-  isLMStudioAvailable: jest.fn(),
-  getLMStudioModels: jest.fn(),
+  isOllamaAvailable: jest.fn(),
+  isLMStudioAvailable: jest.fn(), // alias kept for backward compat
+  getOllamaModels: jest.fn(),
+  getLMStudioModels: jest.fn(),   // alias kept for backward compat
   routeModel: jest.fn(),
 }));
 
-import { isLMStudioAvailable, getLMStudioModels } from '../llm';
+import { isOllamaAvailable, getOllamaModels } from '../llm';
 
-const mockIsAvailable = isLMStudioAvailable as jest.MockedFunction<typeof isLMStudioAvailable>;
-const mockGetModels = getLMStudioModels as jest.MockedFunction<typeof getLMStudioModels>;
+const mockIsAvailable = isOllamaAvailable as jest.MockedFunction<typeof isOllamaAvailable>;
+const mockGetModels = getOllamaModels as jest.MockedFunction<typeof getOllamaModels>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: build a large code block string
@@ -578,23 +580,25 @@ describe('compressMessages', () => {
     jest.restoreAllMocks();
     mockIsAvailable.mockReset();
     mockGetModels.mockReset();
+    // compression.ts calls getOllamaModels() directly; default to empty (no Ollama)
+    mockGetModels.mockResolvedValue([]);
   });
 
   it('should return original messages when LM Studio unavailable and AST disabled', async () => {
-    mockIsAvailable.mockResolvedValue(false);
+    // mockGetModels returns [] (set in beforeEach) → ollamaAvailable = false
 
     const messages = [{ role: 'user', content: 'Hello world' }];
     const result = await compressMessages(messages, 'You are helpful.', 'light');
 
     expect(result.compressedMessages).toEqual(messages);
     expect(result.compressedSystem).toBe('You are helpful.');
-    expect(result.stats.lmStudioAvailable).toBe(false);
+    expect(result.stats.ollamaAvailable).toBe(false);
     expect(result.stats.reductionPercent).toBe(0);
     expect(result.stats.compressionLevel).toBe('light');
   });
 
   it('should compress messages with medium level', async () => {
-    mockIsAvailable.mockResolvedValue(false); // AST only
+    // mockGetModels returns [] (beforeEach) → AST only, no LLM
 
     const largeBlock = '```typescript\n' + sampleTypeScriptCode.repeat(2) + '\n```';
     const messages = [
@@ -609,7 +613,7 @@ describe('compressMessages', () => {
   });
 
   it('should compress messages with aggressive level', async () => {
-    mockIsAvailable.mockResolvedValue(false);
+    // mockGetModels returns [] (beforeEach) → AST only
 
     const largeBlock = '```typescript\n' + sampleTypeScriptCode + '\n```';
     const messages = [
@@ -623,8 +627,7 @@ describe('compressMessages', () => {
   });
 
   it('should skip messages below the threshold', async () => {
-    mockIsAvailable.mockResolvedValue(true);
-    mockGetModels.mockResolvedValue(['qwen/qwen3.5-9b']);
+    mockGetModels.mockResolvedValue(['qwen:7b']); // Ollama available
 
     const shortMessages = [
       { role: 'user', content: 'Short prompt' },
@@ -638,7 +641,7 @@ describe('compressMessages', () => {
   });
 
   it('should handle Anthropic content block arrays', async () => {
-    mockIsAvailable.mockResolvedValue(false);
+    // mockGetModels returns [] (beforeEach) → AST only
 
     const largeBlock = '```typescript\n' + sampleTypeScriptCode + '\n```';
     const messages = [
@@ -656,7 +659,7 @@ describe('compressMessages', () => {
   });
 
   it('should correctly calculate reduction statistics', async () => {
-    mockIsAvailable.mockResolvedValue(false);
+    // mockGetModels returns [] (beforeEach) → no Ollama
 
     const messages = [{ role: 'user', content: 'x'.repeat(100) }];
     const result = await compressMessages(messages, 'sys', 'medium');
@@ -668,7 +671,7 @@ describe('compressMessages', () => {
   });
 
   it('should compress system prompt if large enough', async () => {
-    mockIsAvailable.mockResolvedValue(false);
+    // mockGetModels returns [] (beforeEach) → AST only
 
     const largeSystem = '```typescript\n' + sampleTypeScriptCode.repeat(10) + '\n```';
     const messages = [{ role: 'user', content: 'Hello' }];

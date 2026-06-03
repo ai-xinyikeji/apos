@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "APOS Extension",
-  "version": "1.0.0",
-  "description": "AI Product OS 浏览器伴侣 - 自动同步 ChatGPT 和 Gemini 的 Session Cookies 到本地 APOS",
+  "version": "3.0.3",
+  "description": "AI Product OS 浏览器伴侣 - 在真实浏览器页面内触发对话并流式回传结果，无需 API Key 或 Cookie 同步",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -18,17 +18,19 @@
     "default_title": "APOS Extension"
   },
   "permissions": [
-    "cookies",
+    "tabs",
+    "scripting",
     "storage",
-    "tabs"
+    "alarms"
   ],
   "host_permissions": [
     "https://*.chatgpt.com/*",
     "https://*.openai.com/*",
-    "https://*.google.com/*",
     "https://gemini.google.com/*",
     "https://*.moonshot.cn/*",
     "https://kimi.moonshot.cn/*",
+    "https://www.google.com/*",
+    "https://google.com/*",
     "http://localhost:3000/*"
   ],
   "background": {
@@ -36,9 +38,75 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://localhost:3000/settings"],
+      "matches": [
+        "http://localhost:3000/*"
+      ],
       "js": ["content.js"],
-      "run_at": "document_end"
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["chatgpt-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["llm-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://gemini.google.com/*"
+      ],
+      "js": ["gemini-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://gemini.google.com/*"
+      ],
+      "js": ["llm-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://kimi.moonshot.cn/*"
+      ],
+      "js": ["kimi-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://kimi.moonshot.cn/*"
+      ],
+      "js": ["llm-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.google.com/*",
+        "https://google.com/*"
+      ],
+      "js": ["google-search-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.google.com/*",
+        "https://google.com/*"
+      ],
+      "js": ["llm-content.js"],
+      "run_at": "document_idle"
     }
   ]
 }

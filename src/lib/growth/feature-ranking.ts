@@ -195,13 +195,28 @@ ${signalsText || 'No recent user signals.'}
 `;
 
     try {
-      const { getLLMClient, generateText } = await import('../llm');
-      const activeClient = await getLLMClient('ReportGenerator');
+      const { getLLMClient, generateText, routeModel } = await import('../llm');
+      let activeClient = await getLLMClient('ReportGenerator');
       
-      const { text } = await generateText({
-        model: activeClient.model,
-        prompt,
-      });
+      let text: string;
+      try {
+        const result = await generateText({
+          model: activeClient.model,
+          prompt,
+        });
+        text = result.text;
+      } catch (llmErr: any) {
+        const msg: string = llmErr?.message || '';
+        const is404 = msg === 'Not Found' || msg === '404' || msg.startsWith('404 ') || llmErr?.status === 404 || llmErr?.statusCode === 404;
+        if (is404) {
+          console.warn('[FeatureRanker] Primary model 404, switching to fallback...');
+          activeClient = await routeModel('default');
+          const result = await generateText({ model: activeClient.model, prompt });
+          text = result.text;
+        } else {
+          throw llmErr;
+        }
+      }
 
       return text;
     } catch (err: any) {

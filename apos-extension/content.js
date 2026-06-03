@@ -1,60 +1,30 @@
-console.log('[AI Product OS Extension] Content script loaded.');
+/**
+ * APOS Extension Content Script v2.0
+ *
+ * 注入到 localhost:3000 页面。
+ * 功能：标记插件已安装，供 APOS 前端检测。
+ * 
+ * v2.0 变更：移除 cookie 同步相关功能（新架构不再需要）
+ */
 
-// Tell the page that the extension is installed
+// ── 立即标记插件已安装（document_start 时执行，早于 React） ──────────────────
 document.documentElement.setAttribute('data-apos-extension-installed', 'true');
-window.dispatchEvent(new CustomEvent('apos-extension-installed'));
 
-// Listen for a custom event from the page to trigger sync
-window.addEventListener('apos-sync-cookies-request', async () => {
-  console.log('[AI Product OS Extension] Sync request received.');
-  
-  chrome.runtime.sendMessage({ action: 'get_cookies' }, async (response) => {
-    if (!response || !response.success) {
-      const errMsg = response ? response.error : 'Unknown error';
-      console.error('[AI Product OS Extension] Failed to get cookies:', errMsg);
-      window.dispatchEvent(new CustomEvent('apos-sync-cookies-response', { 
-        detail: { success: false, error: errMsg } 
-      }));
-      return;
-    }
+// ── 等 DOM ready 后再派发事件（React 可能还没挂载） ──────────────────────────
+function dispatchInstalled() {
+  window.dispatchEvent(new CustomEvent('apos-extension-installed', {
+    detail: { version: '2.0.0' }
+  }));
+}
 
-    console.log('[AI Product OS Extension] Cookies retrieved successfully. Syncing to local server...');
-    
-    // Format cookies as strings for the API
-    const chatgptCookieStr = response.chatgpt.map(c => `${c.name}=${c.value}`).join('; ');
-    const geminiCookieStr = response.gemini.map(c => `${c.name}=${c.value}`).join('; ');
-    const kimiCookieStr = response.kimi.map(c => `${c.name}=${c.value}`).join('; ');
-    
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          chatgpt_cookies: chatgptCookieStr,
-          gemini_cookies: geminiCookieStr,
-          kimi_cookies: kimiCookieStr
-        })
-      });
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', dispatchInstalled);
+} else {
+  dispatchInstalled();
+}
 
-      if (res.ok) {
-        console.log('[AI Product OS Extension] Cookies synced successfully!');
-        window.dispatchEvent(new CustomEvent('apos-sync-cookies-response', { 
-          detail: { success: true } 
-        }));
-      } else {
-        const errText = await res.text();
-        console.error('[AI Product OS Extension] Server returned error:', errText);
-        window.dispatchEvent(new CustomEvent('apos-sync-cookies-response', { 
-          detail: { success: false, error: errText } 
-        }));
-      }
-    } catch (err) {
-      console.error('[AI Product OS Extension] Network error:', err);
-      window.dispatchEvent(new CustomEvent('apos-sync-cookies-response', { 
-        detail: { success: false, error: err.message } 
-      }));
-    }
-  });
-});
+// 额外：延迟再派发一次，确保 React hydration 完成后也能收到
+setTimeout(dispatchInstalled, 500);
+setTimeout(dispatchInstalled, 1500);
+
+console.log('[APOS Content] 已就绪 (v2.0.0)');

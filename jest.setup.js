@@ -1,6 +1,12 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom'
 
+// Polyfill structuredClone — not available in jsdom/older Node environments
+// but used internally by the Vercel AI SDK (generate-text.ts)
+if (typeof globalThis.structuredClone === 'undefined') {
+  globalThis.structuredClone = function(obj) { return JSON.parse(JSON.stringify(obj)); };
+}
+
 // Mock environment variables
 process.env.ANTHROPIC_API_KEY = 'test-key'
 process.env.NODE_ENV = 'test'

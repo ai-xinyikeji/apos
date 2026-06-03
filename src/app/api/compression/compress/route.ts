@@ -28,6 +28,33 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { mode, level = 'medium', messages, system, content, filename, files } = body;
 
+    // Input size limits to prevent DoS / OOM
+    const MAX_CONTENT_SIZE = 500_000;   // 500KB for single content
+    const MAX_FILES_COUNT  = 50;
+    const MAX_FILE_SIZE    = 200_000;   // 200KB per file
+
+    if (content && typeof content === 'string' && content.length > MAX_CONTENT_SIZE) {
+      return NextResponse.json(
+        { error: `content exceeds maximum size of ${MAX_CONTENT_SIZE} characters` },
+        { status: 413 }
+      );
+    }
+    if (files && Array.isArray(files)) {
+      if (files.length > MAX_FILES_COUNT) {
+        return NextResponse.json(
+          { error: `files array exceeds maximum count of ${MAX_FILES_COUNT}` },
+          { status: 413 }
+        );
+      }
+      const oversized = files.find((f: any) => typeof f.content === 'string' && f.content.length > MAX_FILE_SIZE);
+      if (oversized) {
+        return NextResponse.json(
+          { error: `File "${oversized.path}" exceeds maximum size of ${MAX_FILE_SIZE} characters` },
+          { status: 413 }
+        );
+      }
+    }
+
     // Validate compression level
     const validLevels: CompressionLevel[] = ['light', 'medium', 'aggressive'];
     const compressionLevel: CompressionLevel = validLevels.includes(level) ? level : 'medium';

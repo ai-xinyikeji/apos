@@ -7,6 +7,35 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+/**
+ * Blocks shell commands that could cause irreversible damage to the system.
+ * LLM-generated commands must pass this check before execution.
+ */
+function isDangerousCommand(cmd: string): boolean {
+  const normalized = cmd.trim().toLowerCase();
+  const dangerous = [
+    /\brm\s+(-[a-z]*f[a-z]*\s+)?-[a-z]*r/,  // rm -rf, rm -r
+    /\brm\s+-[a-z]*f/,                          // rm -f
+    /\bmkfs\b/,                                  // mkfs (format filesystem)
+    /\bdd\s+.*of=\/dev/,                         // dd writing to device
+    /\bformat\s+[a-z]:/i,                        // Windows format
+    /\bfdisk\b/,                                 // fdisk
+    /\bshred\b/,                                 // shred (secure delete)
+    />\s*\/dev\/sd/,                             // redirect to block device
+    /\bchmod\s+.*777.*\//,                       // chmod 777 on root paths
+    /\bchown\s+.*\s+\//,                         // chown on root
+    /\bsudo\s+rm/,                               // sudo rm
+    /\bsudo\s+dd/,                               // sudo dd
+    /\bpoweroff\b|\breboot\b|\bshutdown\b/,      // system shutdown
+    /\bkill\s+-9\s+-1\b/,                        // kill all processes
+    /:\(\)\{.*\};:/,                             // fork bomb
+    /\beval\s+.*base64/,                         // eval encoded payload
+    /\bcurl\s+.*\|\s*(bash|sh)\b/,              // curl pipe to shell
+    /\bwget\s+.*\|\s*(bash|sh)\b/,              // wget pipe to shell
+  ];
+  return dangerous.some(pattern => pattern.test(normalized));
+}
+
 export interface OpenHandsInput {
   task: string;
   workspacePath?: string;
@@ -98,9 +127,7 @@ Return the commands as a JSON list, e.g.:
 ]
 \`\`\`
 `;
-      const { generateText } = await import('@/lib/llm');
-      const { text } = await generateText({
-        model: llm.model,
+      const { text } = await this.callLLM(runId, llm, {
         prompt,
       });
 
@@ -112,6 +139,12 @@ Return the commands as a JSON list, e.g.:
       const filesModified: string[] = [];
 
       for (const cmd of commands) {
+        // Safety: block dangerous shell commands that could cause irreversible damage
+        if (isDangerousCommand(cmd)) {
+          await this.trace(runId, 'Command Blocked', 'warning', `已拦截危险命令: ${cmd}`);
+          logs.push(`$ ${cmd}\n[BLOCKED: dangerous command]`);
+          continue;
+        }
         await this.trace(runId, 'Shell Command', 'info', `正在运行: ${cmd}`);
         try {
           const { stdout, stderr } = await execAsync(cmd, { cwd: workspacePath });

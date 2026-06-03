@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { agentTraces } from '@/lib/schema';
-import { getLLMClient, LLMConfig } from '@/lib/llm';
+import { getLLMClient, generateText, routeModel, LLMConfig } from '@/lib/llm';
 import { logError, retryWithBackoff } from '@/lib/errors';
 import { metricsCollector } from '@/lib/growth/metrics';
 import { getGlobalProgressTracker, type ProgressStep } from '@/lib/progress-tracker';
@@ -157,6 +157,48 @@ export abstract class BaseAgent<TInput, TOutput> {
         }
       }
     );
+  }
+
+  /**
+   * Calls generateText with automatic 404/Not Found detection and smart-router fallback.
+   * Use this instead of calling generateText() directly in agent subclasses.
+   */
+  protected async callLLM(
+    runId: string,
+    llm: LLMConfig,
+    options: Record<string, any>
+  ): Promise<{ text: string; usage?: any }> {
+    try {
+      return await generateText({ ...options, model: llm.model });
+    } catch (err: any) {
+      const msg: string = err?.message || '';
+      const is404 =
+        msg === 'Not Found' ||
+        msg === '404' ||
+        msg.startsWith('404 ') ||
+        err?.status === 404 ||
+        err?.statusCode === 404;
+
+      if (is404) {
+        await this.trace(
+          runId,
+          'LLM 切换',
+          'warning',
+          `当前模型返回 404，正在切换到备用模型...`
+        );
+        try {
+          const fallback = await routeModel('default');
+          return await generateText({ ...options, model: fallback.model });
+        } catch (fallbackErr: any) {
+          throw new Error(
+            `LLM 调用失败（主模型 404，备用模型也失败）: ${fallbackErr.message}`
+          );
+        }
+      }
+
+      // Re-throw original error unchanged so callers get the real message
+      throw err;
+    }
   }
 
   /**

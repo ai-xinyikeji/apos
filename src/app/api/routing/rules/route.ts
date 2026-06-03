@@ -38,6 +38,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate priority range
+    if (priority !== undefined) {
+      const p = Number(priority);
+      if (!isFinite(p) || p < 1 || p > 100) {
+        return NextResponse.json({ error: 'priority must be a number between 1 and 100' }, { status: 400 });
+      }
+    }
+
     const rule: CustomRule = {
       id: randomUUID(),
       name,

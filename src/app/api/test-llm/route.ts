@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getLLMClient, routeModel, isOllamaAvailable, type TaskType } from '@/lib/llm';
 import { generateText } from '@/lib/llm';
 
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 /**
- * POST /api/test-llm - Test LLM with different routing strategies
+ * POST /api/test-llm - Test LLM with different routing strategies (dev only)
  */
 export async function POST(request: NextRequest) {
+  if (!IS_DEV) {
+    return NextResponse.json({ error: 'This endpoint is only available in development' }, { status: 403 });
+  }
+
   try {
     const { prompt = 'Hello! Please respond in one sentence.', taskType = 'default', useRouter = false } = await request.json();
     
@@ -43,7 +49,7 @@ export async function POST(request: NextRequest) {
       { 
         success: false,
         error: error.message,
-        stack: error.stack,
+        stack: IS_DEV ? error.stack : undefined,
       },
       { status: 500 }
     );
