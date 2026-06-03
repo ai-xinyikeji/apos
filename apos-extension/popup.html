@@ -5,268 +5,358 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>APOS Extension</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      width: 360px;
-      min-height: 400px;
+      width: 380px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
       color: #e2e8f0;
-      padding: 0;
     }
 
     .header {
       background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-      padding: 20px;
-      text-align: center;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 16px 20px;
     }
+    .header h1 { font-size: 16px; font-weight: 700; }
+    .header p { font-size: 11px; opacity: 0.85; margin-top: 2px; }
 
-    .header h1 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
+    .content { padding: 14px 16px; }
 
-    .header p {
-      font-size: 12px;
-      opacity: 0.9;
-    }
-
-    .content {
-      padding: 20px;
-    }
-
-    .status-card {
-      background: rgba(30, 41, 59, 0.5);
-      border: 1px solid rgba(71, 85, 105, 0.3);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-
+    /* Status rows */
     .status-row {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(71, 85, 105, 0.3);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .status-label { 
+      font-size: 12px; 
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-value { font-size: 12px; font-weight: 500; }
+    .status-connected { color: #10b981; }
+    .status-disconnected { color: #ef4444; }
+    .status-warning { color: #f59e0b; }
+
+    .queue-info {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .queue-idle {
+      background: rgba(100, 116, 139, 0.15);
+      color: #94a3b8;
+    }
+    .queue-active {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
     }
 
-    .status-row:last-child {
-      margin-bottom: 0;
+    /* Provider cards */
+    .provider-card {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(71, 85, 105, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
-
-    .status-label {
+    .provider-card:hover {
+      background: rgba(15, 23, 42, 0.75);
+      border-color: rgba(99, 102, 241, 0.4);
+      transform: translateY(-1px);
+    }
+    .provider-name {
       font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-bottom: 6px;
+    }
+
+    .tab-status {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 5px;
+    }
+    .tab-status-ok {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+    }
+    .tab-status-pending {
+      background: rgba(100, 116, 139, 0.1);
+      border: 1px solid rgba(100, 116, 139, 0.2);
       color: #94a3b8;
     }
 
-    .status-value {
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .status-connected {
-      color: #10b981;
-    }
-
-    .status-disconnected {
-      color: #ef4444;
-    }
-
-    .status-warning {
-      color: #f59e0b;
-    }
-
+    /* Buttons */
     .btn {
       width: 100%;
-      padding: 12px;
+      padding: 10px;
       border: none;
       border-radius: 8px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-      color: white;
+    .btn-secondary {
+      background: rgba(71, 85, 105, 0.25);
+      color: #cbd5e1;
+      border: 1px solid rgba(71, 85, 105, 0.4);
     }
+    .btn-secondary:hover { background: rgba(71, 85, 105, 0.4); }
+    .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+    .btn-test {
+      padding: 4px 10px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(99, 102, 241, 0.1);
+      color: #818cf8;
     }
-
-    .btn-primary:disabled {
+    .btn-test:hover {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: rgba(99, 102, 241, 0.5);
+    }
+    .btn-test:disabled {
       opacity: 0.5;
       cursor: not-allowed;
-      transform: none;
     }
 
-    .btn-secondary {
-      background: rgba(71, 85, 105, 0.3);
-      color: #e2e8f0;
-      border: 1px solid rgba(71, 85, 105, 0.5);
+    .test-result {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-all;
     }
-
-    .btn-secondary:hover {
-      background: rgba(71, 85, 105, 0.5);
-    }
-
-    .message {
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 12px;
-      display: none;
-    }
-
-    .message.show {
-      display: block;
-    }
-
-    .message-success {
+    .test-result-success {
       background: rgba(16, 185, 129, 0.1);
       border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #10b981;
+      color: #6ee7b7;
     }
-
-    .message-error {
+    .test-result-error {
       background: rgba(239, 68, 68, 0.1);
       border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #ef4444;
+      color: #fca5a5;
     }
 
-    .message-info {
-      background: rgba(59, 130, 246, 0.1);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      color: #3b82f6;
+    /* Message */
+    .message {
+      padding: 10px 12px;
+      border-radius: 7px;
+      font-size: 12px;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .message.show { display: block; }
+    .message-success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: #10b981; }
+    .message-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; }
+    .message-info { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; }
+    .message-warning { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #f59e0b; }
+
+    .warnings-box {
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.25);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .warnings-box.show { display: block; }
+    .warnings-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #fbbf24;
+      margin-bottom: 6px;
+    }
+    .warnings-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .warnings-list li {
+      font-size: 11px;
+      color: #fcd34d;
+      padding: 3px 0;
+      padding-left: 16px;
+      position: relative;
+    }
+    .warnings-list li:before {
+      content: '⚠️';
+      position: absolute;
+      left: 0;
     }
 
     .spinner {
       display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
       border-top-color: white;
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
-      margin-right: 8px;
-      vertical-align: middle;
     }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     .footer {
-      padding: 16px 20px;
-      border-top: 1px solid rgba(71, 85, 105, 0.3);
+      padding: 10px 16px;
+      border-top: 1px solid rgba(71, 85, 105, 0.25);
       text-align: center;
+      font-size: 10px;
+      color: #475569;
+    }
+
+    .tip {
       font-size: 11px;
       color: #64748b;
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid rgba(71, 85, 105, 0.2);
+      border-radius: 7px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      line-height: 1.5;
     }
+    .tip strong { color: #94a3b8; }
 
-    .footer a {
-      color: #818cf8;
-      text-decoration: none;
-    }
-
-    .footer a:hover {
-      text-decoration: underline;
-    }
-
-    .cookie-count {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(71, 85, 105, 0.3);
-    }
-
-    .cookie-item {
-      text-align: center;
-    }
-
-    .cookie-item-label {
+    .section-title {
       font-size: 11px;
-      color: #64748b;
-      margin-bottom: 4px;
-    }
-
-    .cookie-item-value {
-      font-size: 16px;
       font-weight: 600;
-      color: #818cf8;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 16px 0 8px 0;
     }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>🤖 APOS Extension</h1>
-    <p>AI Product OS 浏览器伴侣</p>
+    <p>AI Product OS 浏览器伴侣 v3.0.3</p>
   </div>
 
   <div class="content">
     <div id="message" class="message"></div>
 
-    <div class="status-card">
-      <div class="status-row">
-        <span class="status-label">本地服务器</span>
-        <span id="serverStatus" class="status-value status-disconnected">未连接</span>
+    <!-- Warnings Box -->
+    <div id="warningsBox" class="warnings-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="warnings-title" style="margin-bottom: 0;">⚠️ 系统警告</div>
+        <button id="clearQueueBtn" class="btn-test" style="border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.15); color: #fbbf24; padding: 2px 6px;">
+          🧹 清除积压任务
+        </button>
       </div>
-      <div class="status-row">
-        <span class="status-label">ChatGPT Cookies</span>
-        <span id="chatgptStatus" class="status-value status-warning">未检测</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">Gemini Cookies</span>
-        <span id="geminiStatus" class="status-value status-warning">未检测</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">Kimi Cookies</span>
-        <span id="kimiStatus" class="status-value status-warning">未检测</span>
-      </div>
-
-      <div class="cookie-count">
-        <div class="cookie-item">
-          <div class="cookie-item-label">ChatGPT</div>
-          <div id="chatgptCount" class="cookie-item-value">0</div>
-        </div>
-        <div class="cookie-item">
-          <div class="cookie-item-label">Gemini</div>
-          <div id="geminiCount" class="cookie-item-value">0</div>
-        </div>
-        <div class="cookie-item">
-          <div class="cookie-item-label">Kimi</div>
-          <div id="kimiCount" class="cookie-item-value">0</div>
-        </div>
-      </div>
+      <ul id="warningsList" class="warnings-list"></ul>
     </div>
 
-    <button id="syncBtn" class="btn btn-primary">
-      同步 Cookies 到 APOS
-    </button>
+    <!-- Server & Extension Status -->
+    <div class="status-row">
+      <span class="status-label">🖥 APOS 服务器</span>
+      <span id="serverStatus" class="status-value status-disconnected">检测中...</span>
+    </div>
+
+    <div class="status-row">
+      <span class="status-label">🔌 插件状态</span>
+      <span id="extensionStatus" class="status-value">—</span>
+    </div>
+
+    <div class="status-row">
+      <span class="status-label">📊 任务队列</span>
+      <span id="queueInfo" class="queue-info queue-idle">—</span>
+    </div>
+
+    <div class="tip">
+      <strong>💡 工作原理：</strong>插件会在浏览器页面内触发真实对话，捕获 SSE 流数据并实时推送到 APOS。请保持对应网站标签页打开。
+    </div>
+
+    <div class="section-title">Provider 标签页状态</div>
+
+    <!-- ChatGPT -->
+    <div class="provider-card" data-provider="chatgpt" title="点击打开/聚焦 ChatGPT 标签页">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="provider-name">ChatGPT</div>
+        <button id="testChatgptBtn" class="btn-test" style="display: none;">
+          🧪 测试
+        </button>
+      </div>
+      <div id="chatgptTabStatus" class="tab-status tab-status-pending">
+        检测中...
+      </div>
+      <div id="chatgptTestResult" class="test-result" style="display: none;"></div>
+    </div>
+
+    <!-- Gemini -->
+    <div class="provider-card" data-provider="gemini" title="点击打开/聚焦 Gemini 标签页">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="provider-name">Gemini</div>
+        <button id="testGeminiBtn" class="btn-test" style="display: none;">
+          🧪 测试
+        </button>
+      </div>
+      <div id="geminiTabStatus" class="tab-status tab-status-pending">
+        检测中...
+      </div>
+      <div id="geminiTestResult" class="test-result" style="display: none;"></div>
+    </div>
+
+    <!-- Kimi -->
+    <div class="provider-card" data-provider="kimi" title="点击打开/聚焦 Kimi 标签页">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="provider-name">Kimi</div>
+        <button id="testKimiBtn" class="btn-test" style="display: none;">
+          🧪 测试
+        </button>
+      </div>
+      <div id="kimiTabStatus" class="tab-status tab-status-pending">
+        检测中...
+      </div>
+      <div id="kimiTestResult" class="test-result" style="display: none;"></div>
+    </div>
+
+    <!-- Google Search -->
+    <div class="provider-card" data-provider="google" title="点击打开/聚焦 Google Search 标签页">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="provider-name">Google Search</div>
+        <button id="testGoogleBtn" class="btn-test" style="display: none;">
+          🧪 测试
+        </button>
+      </div>
+      <div id="googleTabStatus" class="tab-status tab-status-pending">
+        检测中...
+      </div>
+      <div id="googleTestResult" class="test-result" style="display: none;"></div>
+    </div>
 
     <button id="refreshBtn" class="btn btn-secondary">
-      刷新状态
+      🔄 刷新状态
     </button>
-
     <button id="openSettingsBtn" class="btn btn-secondary">
-      打开 APOS 设置
+      ⚙️ 打开 APOS 设置
     </button>
   </div>
 
   <div class="footer">
-    <p>Version 1.0.0 | <a href="https://github.com/your-repo/apos" target="_blank">GitHub</a></p>
+    v3.0.3 · DOM 触发 · SSE 流式推送 · <span id="lastUpdate">-</span>
   </div>
 
   <script src="popup.js"></script>
