@@ -19,7 +19,6 @@ APOS is a multi-agent AI system that automates the entire product development li
 ┌───────────────────────▼─────────────────────────────┐
 │                    API Layer                         │
 │   /api/prototypes  /api/insights  /api/traces  ...   │
-│   /api/v1/messages  (Claude CLI proxy)               │
 └───────────────────────┬─────────────────────────────┘
                         │
 ┌───────────────────────▼─────────────────────────────┐
@@ -35,42 +34,54 @@ APOS is a multi-agent AI system that automates the entire product development li
    │          │          │          │
 ┌──▼──────────▼──────────▼──────────▼──────────────────┐
 │                     Data Layer                        │
-│   SQLite (Drizzle)  ·  LanceDB (vectors)              │
-│   LLM Router: Ollama/LM Studio → Gemini → OpenAI      │
-│                       → Claude                        │
+│   SQLite (Drizzle ORM)  ·  LanceDB (vector store)     │
+│   LLM Router: Ollama → Gemini → OpenAI → Anthropic    │
 └───────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
-### 🤖 Agents
+### 🤖 AI Agents
+
 | Agent | What it does |
 |-------|-------------|
-| **ProtoBuilder** | Generates React components from text or sketch images; self-healing compiler retries up to 3× |
-| **SignalCollector** | Pulls user feedback from Amplitude, Zendesk, competitor trackers, Hacker News, Reddit |
-| **ReviewBot** | Automated code review with security scanning; posts comments directly to GitHub PRs |
-| **ReportGenerator** | Synthesises collected signals into a weekly product insight report |
+| **ProtoBuilder** | Generates complete React components from text descriptions or sketch images; includes a self-healing compiler that auto-fixes TypeScript errors up to 3× |
+| **SignalCollector** | Aggregates user feedback from Amplitude, Zendesk, competitor trackers, Hacker News, and Reddit into structured signals |
+| **ReviewBot** | Automated code review with security scanning (path traversal, hardcoded secrets, unauth DB writes); posts results as GitHub PR comments |
+| **ReportGenerator** | Synthesises collected signals into a weekly Markdown product insight report |
 
-### ⚡ Performance & Cost
-- **Context Compression** — AST + LLM hybrid engine, 70%+ token savings
-- **Local-first LLM routing** — Ollama / LM Studio first, cloud APIs as fallback
-- **Prompt Caching** — Claude cache headers cut costs 70–90%
-- **Parallel DAG execution** — 50–70% faster multi-task workflows
-- **Result caching** — 80%+ speedup on repeated tasks
+### ⚡ Performance & Cost Optimization
 
-### 🔍 RAG System
-- LanceDB + Xenova Transformers (all-MiniLM-L6-v2, 384-dim)
-- Automatic codebase indexing; semantic search for component reuse
+- **Context Compression** — AST + LLM hybrid engine reduces token usage by 70%+
+- **Local-first LLM routing** — Ollama / LM Studio tried first, cloud APIs as fallback
+- **Parallel DAG execution** — independent agent tasks run concurrently, 50–70% faster
+- **Result caching** — memoises agent outputs with TTL, 80%+ speedup on repeated runs
+- **Smart model routing** — selects model tier based on task complexity
 
-### 🌐 Browser Extension
-Chrome extension that integrates Google Search results into APOS as a structured data source for signal collection.
+### 🔍 RAG-Powered Code Search
 
-### 🔧 Integrations
-- **Claude Desktop MCP** — 15 tools available inside Claude Desktop
-- **Claude CLI proxy** — route CLI requests through APOS for free local inference
-- **GitHub** — branch, commit, push, and PR creation are fully automated
+- **LanceDB** vector store with **Xenova Transformers** embeddings (all-MiniLM-L6-v2, 384-dim, fully local)
+- Automatically indexes your codebase; ProtoBuilder retrieves relevant components before generating new code
+- No external embedding API required
+
+### 🌐 Google Search Signal Integration
+
+Chrome extension that parses Google Search AI Overview results and injects them as structured product signals — no additional API cost for this data source.
+
+### � GitHub Integration
+
+Fully automated Git workflow: branch creation → commit → push → Pull Request via GitHub API.
 
 ## Quick Start
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+- Git
+- (Optional) [Ollama](https://ollama.ai) for local, free inference
+
+### Installation
 
 ```bash
 # 1. Clone
@@ -85,75 +96,63 @@ npm run db:push
 
 # 4. Configure environment
 cp .env.example .env.local
-# Edit .env.local — add at least one LLM API key (see below)
-
-# 5. Start
-npm run dev
+# Edit .env.local — add at least one LLM API key
 ```
-
-Open [http://localhost:3000](http://localhost:3000).
 
 ### Minimum `.env.local`
 
 ```env
 # Add at least one provider key
-ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_GENERATIVE_AI_API_KEY=AIza...
+ANTHROPIC_API_KEY=sk-ant-...
 
-# Optional — required only for PR creation
+# Optional — required only for automated PR creation
 GITHUB_TOKEN=ghp_...
 ```
 
-## Usage Modes
-
-### Mode 1 — Web UI
-
-Visit `http://localhost:3000` for the full interface: create prototypes, view signals, review PRs, and adjust settings.
-
-### Mode 2 — Claude CLI Proxy (free) ⭐
-
-Route every `claude` CLI call through APOS so it uses your local Ollama / LM Studio model with automatic context compression.
+### Start
 
 ```bash
-# One-time setup
-./scripts/setup-claude-cli.sh
-
-# Or manually add to ~/.zshrc / ~/.bashrc
-export ANTHROPIC_BASE_URL=http://localhost:3000/api/v1
-export ANTHROPIC_API_KEY=your_key   # still required by the CLI
-
-source ~/.zshrc
-
-# Then use Claude CLI as normal — inference runs locally for free
-claude "Write a TypeScript function to calculate Fibonacci numbers"
+npm run dev
 ```
 
-### Mode 3 — Claude Desktop MCP
+Open [http://localhost:3000](http://localhost:3000).
 
-Call APOS tools (RAG search, prototype generation, code review, …) directly from Claude Desktop conversations.
+## Using APOS
 
-```bash
-./scripts/setup-claude-desktop.sh
-```
+### 1. Configure your LLM provider
 
-Or manually add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Go to **Settings** → select a provider and paste your API key. APOS supports:
 
-```json
-{
-  "mcpServers": {
-    "apos": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/apos/src/mcp/server.ts"],
-      "env": {
-        "APOS_DIR": "/path/to/apos"
-      }
-    }
-  }
-}
-```
+| Provider | Notes |
+|----------|-------|
+| **Ollama** | Local, no API cost. Install from [ollama.ai](https://ollama.ai) |
+| **LM Studio** | Local GUI model runner |
+| **OpenAI** | GPT-4o, GPT-4o-mini |
+| **Google Gemini** | Gemini 1.5 Pro / Flash |
+| **Anthropic** | Claude 3.5 Sonnet / Haiku |
+| **DeepSeek** | Via OpenAI-compatible API |
+| **Custom OpenAI-compatible** | Any provider with an OpenAI-compatible endpoint |
 
-Restart Claude Desktop. The MCP tool executions use your local model, so they're free even inside paid Claude conversations.
+### 2. Generate a prototype
+
+1. Go to **Prototypes** → **New Prototype**
+2. Describe the feature in plain English (optionally attach a sketch image)
+3. Click **Assess Feasibility** to get a technical plan, or **Generate** to produce code immediately
+4. APOS creates a feature branch, writes the files, commits, and opens a PR
+
+### 3. Collect product signals
+
+Go to **Insights** → **Collect Signals**. The SignalCollector agent pulls feedback from configured sources and stores them for analysis.
+
+### 4. Generate a weekly report
+
+Go to **Insights** → **Generate Report**. The ReportGenerator synthesises all pending signals into a prioritised Markdown report.
+
+### 5. Review pull requests
+
+Go to **Pull Requests** → select a PR → **Run Review**. ReviewBot analyses the diff and posts security and quality findings as a GitHub comment.
 
 ## Tech Stack
 
@@ -165,7 +164,7 @@ Restart Claude Desktop. The MCP tool executions use your local model, so they're
 | Database | SQLite via Drizzle ORM |
 | Vector DB | LanceDB |
 | LLM SDK | Vercel AI SDK |
-| LLM Providers | Anthropic · OpenAI · Google · Ollama · LM Studio |
+| LLM Providers | OpenAI · Google Gemini · Anthropic · Ollama · LM Studio · DeepSeek |
 | Embeddings | Xenova Transformers (local, no API key needed) |
 | AST Parsing | TypeScript Compiler API, Babel Parser |
 | Git | simple-git |
@@ -191,19 +190,28 @@ npm run db:studio    # Open Drizzle Studio (database GUI)
 apos/
 ├── src/
 │   ├── agents/          # AI Agent implementations
+│   │   ├── base.ts      # BaseAgent abstract class
+│   │   ├── proto-builder.ts
+│   │   ├── signal-collector.ts
+│   │   ├── review-bot.ts
+│   │   └── report-generator.ts
 │   ├── app/             # Next.js App Router pages & API routes
 │   │   └── api/         # REST endpoints
 │   ├── components/      # React components (shadcn/ui + features)
-│   ├── lib/             # Core libraries (db, llm, rag, compression, git)
-│   └── mcp/             # Claude Desktop MCP server
-├── apos-extension/      # Chrome extension source
+│   └── lib/             # Core libraries
+│       ├── llm.ts       # LLM router with fallback chain
+│       ├── rag.ts       # Vector search engine
+│       ├── compression.ts # Context compression engine
+│       ├── db.ts        # Database connection
+│       └── git.ts       # Git operations
+├── apos-extension/      # Chrome extension (Google Search integration)
 ├── drizzle/             # Database migration files
-└── data/                # Runtime data (SQLite + LanceDB, git-ignored)
+└── data/                # Runtime data — SQLite + LanceDB (git-ignored)
 ```
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit message format (Conventional Commits), and the PR checklist before opening a pull request.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit message conventions (Conventional Commits), and the PR checklist.
 
 ## License
 
