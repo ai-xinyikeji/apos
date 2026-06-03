@@ -56,9 +56,8 @@ Thumbs.db
 # IDE directories — never commit these
 .idea/
 .kiro/
-.vscode/settings.json
-.vscode/launch.json
-# Keep .vscode/extensions.json (useful for team)
+.vscode/
+__tests__-extension/
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 npm-debug.log*
