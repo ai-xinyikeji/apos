@@ -27,14 +27,16 @@
 # Keep .env.example (it's a template, safe to commit)
 
 # ─── Database ─────────────────────────────────────────────────────────────────
-# SQLite database files (contain user data, API keys, cookies)
+# SQLite database files (contain user data, API keys)
+*.db
+*.db-shm
+*.db-wal
+apos.db
 data/apos.db
-data/apos.db-shm
-data/apos.db-wal
 # Vector DB (large binary files, auto-generated)
 data/vectordb/
 data/vectordb_test/
-# Reports (generated output)
+# Generated reports (runtime output)
 data/reports/
 # Keep data/.gitkeep so the data/ directory is tracked
 
@@ -70,6 +72,11 @@ yarn-error.log*
 *.pem
 .vercel
 /scratch/
+# Kiro / Claude agent instruction files (local tooling only)
+AGENTS.md
+CLAUDE.md
+# Compiled extension package
+*.crx
 
 # ─── SWC cache ────────────────────────────────────────────────────────────────
 .swc/
