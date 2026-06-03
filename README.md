@@ -63,7 +63,7 @@ APOS is a multi-agent AI system that automates the entire product development li
 - Automatic codebase indexing; semantic search for component reuse
 
 ### 🌐 Browser Extension
-Chrome extension proxies ChatGPT, Gemini, Kimi, and Google Search as zero-cost LLM backends.
+Chrome extension that integrates Google Search results into APOS as a structured data source for signal collection.
 
 ### 🔧 Integrations
 - **Claude Desktop MCP** — 15 tools available inside Claude Desktop

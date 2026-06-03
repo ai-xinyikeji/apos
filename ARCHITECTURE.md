@@ -427,74 +427,73 @@ Compression failures are non-fatal: the engine falls back to the original conten
 
 ## Browser Extension Architecture
 
-The Chrome extension acts as a transparent proxy, injecting APOS as a backend for web-based LLM interfaces.
+The Chrome extension serves as a companion tool that integrates Google Search results into APOS. It parses AI Overview content and structured search results directly from the Google Search page DOM, then stores them as product signals — no LLM call required for this data source.
 
 ```
-Claude CLI / APOS Web
+APOS Server
         │
-        │  POST /api/v1/messages  (Anthropic-compatible)
+        │  Dispatches 'google' search task
         ▼
 ┌───────────────────────────────────────────────┐
-│             APOS Proxy Server                 │
-│   • Context compression (auto)                │
-│   • LLM routing (local → cloud)               │
-└───────────────────────────────────────────────┘
-
-Browser Extension (Chrome)
-        │
-        │  Content scripts injected into:
-        │    • chat.openai.com  (chatgpt-hook.js)
-        │    • gemini.google.com (gemini-hook.js)
-        │    • kimi.moonshot.cn  (kimi-hook.js)
-        │    • google.com/search (google-search-hook.js)
-        ▼
-┌───────────────────────────────────────────────┐
-│              background.js                    │
-│   Receives messages from content scripts      │
-│   Forwards to APOS at localhost:3000          │
-│   Returns LLM response back to page           │
+│             ExtProxyStore                     │
+│   Task queue + result streaming               │
 └───────────────────────────────────────────────┘
         │
-        │  Popup (popup.html / popup.js)
+        │  Extension polls for pending tasks
         ▼
 ┌───────────────────────────────────────────────┐
-│   Extension UI                                │
-│   • Enable / disable proxy per site           │
-│   • Google Search test button                 │
+│        Chrome Extension (background.js)       │
+│   Receives task from APOS server              │
+│   Injects google-search-hook.js into tab      │
+└───────────────────────────────────────────────┘
+        │
+        │  Content script runs on google.com/search
+        ▼
+┌───────────────────────────────────────────────┐
+│        google-search-hook.js (MAIN world)     │
+│   Waits for page render                       │
+│   Extracts AI Overview + search results       │
+│   Returns structured JSON to APOS             │
+└───────────────────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────────────────┐
+│   Extension UI  (popup.html / popup.js)       │
 │   • Connection status indicator               │
+│   • Google Search test button                 │
+│   • APOS server health display                │
 └───────────────────────────────────────────────┘
 ```
 
-Supported backends and their cost:
+The extension uses four DOM parsing strategies (in priority order) to reliably extract AI Overview content:
 
-| Backend | Token cost | Notes |
-|---------|-----------|-------|
-| Ollama (local) | Free | Requires local install |
-| LM Studio (local) | Free | GUI-based model runner |
-| Google Search | Free | Via extension hook |
-| Gemini (API) | Low | Fallback tier 1 |
-| DeepSeek (API) | Low | Fallback tier 2 |
-| OpenAI (API) | Medium | Fallback tier 3 |
-| Claude (API) | Medium | Fallback tier 4 |
+| Strategy | Selector | Reliability |
+|----------|----------|-------------|
+| 1 | `[data-attrid="ai_overview"]` | High — official attribute |
+| 2 | `[data-citation]` ancestor traversal | Medium — citation-based |
+| 3 | `.WaaZC` class | Low — obfuscated, may change |
+| 4 | Text-length heuristic on `[data-hveid]` blocks | Medium — language-agnostic fallback |
 
 ---
 
 ## LLM Routing Strategy
 
+APOS routes each request through a priority chain. Local models are tried first to minimise API spend; cloud APIs are used as fallback.
+
 ```
 Request arrives
       │
       ▼
-Is Ollama running?  ──Yes──► Use Ollama (free)
+Is Ollama running?  ──Yes──► Use Ollama (local, no API cost)
       │ No
       ▼
-Is LM Studio running? ──Yes──► Use LM Studio (free)
+Is LM Studio running? ──Yes──► Use LM Studio (local, no API cost)
       │ No
       ▼
-Is Google API key set? ──Yes──► Use Gemini Flash (cheap)
+Is Google API key set? ──Yes──► Use Gemini Flash (low cost)
       │ No
       ▼
-Is DeepSeek key set? ──Yes──► Use DeepSeek (cheap)
+Is DeepSeek key set? ──Yes──► Use DeepSeek (low cost)
       │ No
       ▼
 Is OpenAI key set? ──Yes──► Use GPT-4o-mini

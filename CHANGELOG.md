@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-06-03
 
 ### Added
-- **Google AI Search via browser extension** — zero token cost; the extension hooks into Google Search results and routes answers through APOS, making it a free LLM backend
+- **Google AI Search via browser extension** — the extension hooks into Google Search results pages and parses AI Overview content into structured signals, storing them directly into the database with zero LLM token usage
 - **Google Search test button** in the extension popup so users can verify the integration without leaving the browser
 - **Automatic LLM 404 fallback chain** — when a model returns HTTP 404 (model not found or quota exceeded), the LLM router automatically advances through the fallback chain: Ollama → Gemini Flash → DeepSeek → OpenAI → Claude, with no user intervention required
 - **Enhanced JSON parsing with 3-strategy extraction** — LLM responses are now parsed using three sequential strategies: (1) direct `JSON.parse`, (2) regex-based fence/object extraction, (3) LLM-assisted repair; this eliminates the vast majority of parse failures across different model output styles
@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Context Compression engine** — AST + LLM hybrid compression reduces context size by 70%+ before sending to cloud LLMs; TypeScript/JavaScript files use the TypeScript Compiler API and Babel Parser for fast (<50 ms) structural extraction; other languages fall back to LM Studio summarisation
 - **Task DAG orchestration API** — new `POST /api/orchestrator` endpoint accepts a named workflow and executes its tasks in dependency order with parallelism
 - **Growth OS** — new `/growth` module with metric collection, feature ranking algorithm, A/B testing scaffold, and a Growth Dashboard UI page
-- **Browser extension for web LLMs** — Chrome extension that proxies ChatGPT, Gemini, Kimi, and Google Search as APOS backends, enabling zero-cost inference via the browser
+- **Browser extension for Google Search integration** — Chrome extension that parses Google Search AI Overview results and stores them as structured product signals, enabling real-time competitive intelligence without additional API costs
 
 ### Changed
 - Settings page now includes compression configuration (enable/disable, threshold slider, LM Studio status indicator)
