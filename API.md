@@ -1,141 +1,239 @@
-# APOS API 文档
+# APOS API Reference
 
-本文档描述 APOS 系统的所有 API 端点。
+## Base URL
 
-## 基础信息
-
-- **Base URL**: `http://localhost:3000/api`
-- **Content-Type**: `application/json`
-- **认证**: 当前版本无需认证（本地单用户）
-
-## API 端点
-
-### 1. Prototypes API
-
-#### 1.1 获取所有原型
-
-```http
-GET /api/prototypes
+```
+http://localhost:3000/api
 ```
 
-**响应示例**:
+## Authentication
+
+The current release is designed for local single-user use and does not require authentication. Do not expose the server on a public network without adding an auth layer first.
+
+## Content Type
+
+All endpoints accept and return `application/json` unless noted otherwise.
+
+## Error Format
+
+All error responses share a common shape:
+
+```json
+{ "error": "Human-readable description" }
+```
+
+Common status codes:
+
+| Code | Meaning |
+|------|---------|
+| `200` | Success |
+| `400` | Missing or invalid request parameters |
+| `404` | Resource not found |
+| `500` | Internal server error |
+
+---
+
+## Prototypes
+
+### `POST /api/prototypes`
+
+Create a new prototype in `draft` status.
+
+**Request body**
+
+```typescript
+{
+  name: string;        // required — display name
+  description: string; // required — feature description in plain English
+}
+```
+
+**Response**
+
+```json
+{
+  "id": 1,
+  "name": "User List Card",
+  "description": "Card component showing a paginated, searchable user list",
+  "branchName": "feature/user-list-card-1737123456",
+  "status": "draft",
+  "createdAt": "2026-06-03T10:30:00.000Z"
+}
+```
+
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `400` | `name` or `description` missing |
+| `500` | Database error |
+
+---
+
+### `GET /api/prototypes`
+
+Return all prototypes, newest first.
+
+**Response**
 
 ```json
 [
   {
     "id": 1,
-    "name": "用户列表卡片",
-    "description": "显示用户列表的卡片组件，支持分页和搜索",
-    "branchName": "feature/user-list-card",
+    "name": "User List Card",
+    "description": "Card component showing a paginated, searchable user list",
+    "branchName": "feature/user-list-card-1737123456",
     "status": "pr_created",
     "codePath": null,
     "previewUrl": null,
     "commitHash": "a1b2c3d",
     "prNumber": 42,
     "prUrl": "https://github.com/owner/repo/pull/42",
-    "feasibilityReport": "## 技术可行性\n简单...",
-    "createdAt": "2024-01-15T10:30:00.000Z",
-    "updatedAt": "2024-01-15T11:00:00.000Z"
+    "feasibilityReport": "## Technical Feasibility\n...",
+    "createdAt": "2026-06-03T10:30:00.000Z",
+    "updatedAt": "2026-06-03T11:00:00.000Z"
   }
 ]
 ```
 
-**状态码**:
-- `200 OK`: 成功
-- `500 Internal Server Error`: 数据库错误
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | Database error |
 
 ---
 
-#### 1.2 创建原型草稿
+### `POST /api/prototypes/run`
 
-```http
-POST /api/prototypes
-```
+Trigger the ProtoBuilder Agent for a specific prototype. The agent runs asynchronously — this endpoint returns a `runId` immediately. Poll `/api/traces?runId=<id>` to follow progress.
 
-**请求体**:
+**Request body**
 
-```json
+```typescript
 {
-  "name": "用户列表卡片",
-  "description": "显示用户列表的卡片组件，支持分页和搜索"
+  prototypeId: number;  // required
+  assessOnly?: boolean; // optional, default false — run feasibility check only
+  image?: string;       // optional — base64-encoded PNG/JPEG sketch or mockup
 }
 ```
 
-**字段说明**:
-- `name` (string, required): 原型名称
-- `description` (string, required): 功能描述
-
-**响应示例**:
-
-```json
-{
-  "id": 1,
-  "name": "用户列表卡片",
-  "description": "显示用户列表的卡片组件，支持分页和搜索",
-  "branchName": "feature/user-list-card-1737123456",
-  "status": "draft",
-  "createdAt": "2024-01-15T10:30:00.000Z"
-}
-```
-
-**状态码**:
-- `200 OK`: 创建成功
-- `400 Bad Request`: 缺少必填字段
-- `500 Internal Server Error`: 数据库错误
-
----
-
-#### 1.3 运行原型生成 Agent
-
-```http
-POST /api/prototypes/run
-```
-
-**请求体**:
-
-```json
-{
-  "prototypeId": 1,
-  "assessOnly": false,
-  "image": "data:image/png;base64,iVBORw0KGgoAAAANS..."
-}
-```
-
-**字段说明**:
-- `prototypeId` (number, required): 原型 ID
-- `assessOnly` (boolean, optional): 是否仅评估可行性，默认 `false`
-- `image` (string, optional): Base64 编码的图片（手绘草图）
-
-**响应示例**:
+**Response**
 
 ```json
 {
   "runId": "550e8400-e29b-41d4-a716-446655440000",
-  "message": "ProtoBuilder Agent 已启动"
+  "message": "ProtoBuilder Agent started"
 }
 ```
 
-**状态码**:
-- `200 OK`: Agent 启动成功
-- `400 Bad Request`: 缺少 prototypeId
-- `404 Not Found`: 原型不存在
-- `500 Internal Server Error`: Agent 执行错误
+**Errors**
 
-**说明**:
-- 返回 `runId` 后，可通过 `/api/traces?runId=xxx` 轮询执行日志
-- Agent 执行是异步的，不会阻塞响应
+| Code | Condition |
+|------|-----------|
+| `400` | `prototypeId` missing |
+| `404` | Prototype not found |
+| `500` | Agent startup error |
 
 ---
 
-### 2. Insights API
+## Traces
 
-#### 2.1 获取信号和报告
+### `GET /api/traces`
 
-```http
-GET /api/insights
+Fetch execution log entries for an agent run. Designed to be polled every 2 seconds while an agent is running.
+
+**Query parameters**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `runId` | `string` | Yes | UUID returned by any `*/run` endpoint |
+
+**Response**
+
+```json
+[
+  {
+    "id": 1,
+    "agentName": "ProtoBuilder",
+    "runId": "550e8400-e29b-41d4-a716-446655440000",
+    "step": "Start",
+    "status": "info",
+    "message": "Starting code generation for prototype [User List Card]",
+    "details": null,
+    "createdAt": "2026-06-03T10:30:00.000Z"
+  },
+  {
+    "id": 2,
+    "agentName": "ProtoBuilder",
+    "runId": "550e8400-e29b-41d4-a716-446655440000",
+    "step": "RAG Indexing",
+    "status": "info",
+    "message": "Updating vector index for local codebase",
+    "details": null,
+    "createdAt": "2026-06-03T10:30:05.000Z"
+  },
+  {
+    "id": 5,
+    "agentName": "ProtoBuilder",
+    "runId": "550e8400-e29b-41d4-a716-446655440000",
+    "step": "Success",
+    "status": "success",
+    "message": "Prototype [User List Card] generated successfully",
+    "details": "{\"prUrl\":\"https://github.com/owner/repo/pull/42\"}",
+    "createdAt": "2026-06-03T10:35:00.000Z"
+  }
+]
 ```
 
-**响应示例**:
+Trace `status` values: `"info"` · `"success"` · `"warning"` · `"error"`
+
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `400` | `runId` missing |
+| `500` | Database error |
+
+---
+
+## Insights
+
+### `POST /api/insights`
+
+Trigger the SignalCollector Agent to gather user feedback signals. Returns a `runId` for polling.
+
+**Request body**
+
+```typescript
+{
+  sources?: Array<'amplitude' | 'zendesk' | 'competitor' | 'hackernews' | 'reddit'>;
+  // optional — defaults to all five sources
+}
+```
+
+**Response**
+
+```json
+{
+  "runId": "550e8400-e29b-41d4-a716-446655440001",
+  "message": "SignalCollector Agent started"
+}
+```
+
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | Agent startup error |
+
+---
+
+### `GET /api/insights`
+
+Return all collected signals and generated reports.
+
+**Response**
 
 ```json
 {
@@ -143,252 +241,188 @@ GET /api/insights
     {
       "id": 1,
       "source": "zendesk",
-      "title": "Zendesk #1084: 用户需要 CSV 导出功能",
-      "content": "多位用户反馈希望能够将报表数据导出为 CSV 格式...",
+      "title": "Ticket #1084: Users want CSV export",
+      "content": "Multiple users have requested the ability to export report data as CSV...",
       "url": "https://zendesk.com/tickets/1084",
       "status": "pending",
       "sentiment": "neutral",
-      "createdAt": "2024-01-15T09:00:00.000Z",
-      "updatedAt": "2024-01-15T09:00:00.000Z"
+      "createdAt": "2026-06-03T09:00:00.000Z",
+      "updatedAt": "2026-06-03T09:00:00.000Z"
     }
   ],
   "reports": [
     {
-      "filename": "weekly-20240115-100000.md",
-      "title": "产品洞察周报 - 2024-01-15",
-      "content": "# 产品洞察周报\n\n## 核心发现...",
-      "createdAt": "2024-01-15T10:00:00.000Z"
+      "filename": "weekly-20260603-100000.md",
+      "title": "Weekly Product Insights — 2026-06-03",
+      "content": "# Weekly Product Insights\n\n## Key Findings\n...",
+      "createdAt": "2026-06-03T10:00:00.000Z"
     }
   ]
 }
 ```
 
-**状态码**:
-- `200 OK`: 成功
-- `500 Internal Server Error`: 数据库或文件系统错误
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | Database or filesystem error |
 
 ---
 
-#### 2.2 运行信号收集 Agent
+### `POST /api/insights/report`
 
-```http
-POST /api/insights
-```
+Trigger the ReportGenerator Agent. It reads all `pending` signals and synthesises a Markdown report. Returns a `runId`.
 
-**请求体**:
+**Request body**
 
-```json
-{
-  "sources": ["amplitude", "zendesk", "competitor"]
-}
-```
+None required.
 
-**字段说明**:
-- `sources` (string[], optional): 数据源列表，默认全部
-
-**响应示例**:
-
-```json
-{
-  "runId": "550e8400-e29b-41d4-a716-446655440001",
-  "message": "SignalCollector Agent 已启动"
-}
-```
-
-**状态码**:
-- `200 OK`: Agent 启动成功
-- `500 Internal Server Error`: Agent 执行错误
-
----
-
-#### 2.3 生成周度报告
-
-```http
-POST /api/insights/report
-```
-
-**请求体**: 无
-
-**响应示例**:
+**Response**
 
 ```json
 {
   "runId": "550e8400-e29b-41d4-a716-446655440002",
-  "message": "ReportGenerator Agent 已启动"
+  "message": "ReportGenerator Agent started"
 }
 ```
 
-**状态码**:
-- `200 OK`: Agent 启动成功
-- `400 Bad Request`: 没有待分析的信号
-- `500 Internal Server Error`: Agent 执行错误
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `400` | No pending signals to analyse |
+| `500` | Agent startup error |
 
 ---
 
-### 3. Pull Requests API
+## Pull Requests
 
-#### 3.1 获取所有 Pull Requests
+### `POST /api/pull-requests/review`
 
-```http
-GET /api/pull-requests
+Trigger the ReviewBot Agent for a prototype's open PR. Returns a `runId`.
+
+**Request body**
+
+```typescript
+{
+  prototypeId: number; // required
+}
 ```
 
-**响应示例**:
+**Response**
+
+```json
+{
+  "runId": "550e8400-e29b-41d4-a716-446655440003",
+  "message": "ReviewBot Agent started"
+}
+```
+
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `400` | `prototypeId` missing |
+| `404` | Prototype not found or has no open PR |
+| `500` | Agent startup error |
+
+---
+
+### `GET /api/pull-requests`
+
+List all prototypes that have an associated pull request.
+
+**Response**
 
 ```json
 [
   {
     "id": 1,
-    "name": "用户列表卡片",
-    "branchName": "feature/user-list-card",
+    "name": "User List Card",
+    "branchName": "feature/user-list-card-1737123456",
     "prNumber": 42,
     "prUrl": "https://github.com/owner/repo/pull/42",
     "status": "pr_created",
-    "createdAt": "2024-01-15T10:30:00.000Z"
+    "createdAt": "2026-06-03T10:30:00.000Z"
   }
 ]
 ```
 
-**状态码**:
-- `200 OK`: 成功
-- `500 Internal Server Error`: 数据库错误
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | Database error |
 
 ---
 
-#### 3.2 运行代码审查 Agent
+## Settings
 
-```http
-POST /api/pull-requests/review
-```
+### `GET /api/settings`
 
-**请求体**:
+Return all stored configuration values. API key values are partially masked (`sk-ant-***`).
 
-```json
-{
-  "prototypeId": 1
-}
-```
-
-**字段说明**:
-- `prototypeId` (number, required): 原型 ID
-
-**响应示例**:
-
-```json
-{
-  "runId": "550e8400-e29b-41d4-a716-446655440003",
-  "message": "ReviewBot Agent 已启动"
-}
-```
-
-**状态码**:
-- `200 OK`: Agent 启动成功
-- `400 Bad Request`: 缺少 prototypeId
-- `404 Not Found`: 原型不存在或无 PR
-- `500 Internal Server Error`: Agent 执行错误
-
----
-
-#### 3.3 获取审查报告
-
-```http
-GET /api/pull-requests/report?runId=xxx
-```
-
-**查询参数**:
-- `runId` (string, required): Agent 运行 ID
-
-**响应示例**:
-
-```json
-{
-  "report": "# 代码审查报告\n\n## 📌 改动概览\n...",
-  "status": "success"
-}
-```
-
-**状态码**:
-- `200 OK`: 成功
-- `400 Bad Request`: 缺少 runId
-- `404 Not Found`: 未找到报告
-- `500 Internal Server Error`: 数据库错误
-
----
-
-### 4. Settings API
-
-#### 4.1 获取所有配置
-
-```http
-GET /api/settings
-```
-
-**响应示例**:
+**Response**
 
 ```json
 {
   "llm_provider": "anthropic",
   "llm_model": "claude-3-5-sonnet-20241022",
   "anthropic_api_key": "sk-ant-***",
-  "github_token": "ghp_***"
+  "openai_api_key": "",
+  "google_api_key": "",
+  "github_token": "ghp_***",
+  "compression_enabled": "true",
+  "compression_threshold": "8000"
 }
 ```
 
-**说明**:
-- API Keys 会被部分隐藏（显示前缀 + `***`）
+**Errors**
 
-**状态码**:
-- `200 OK`: 成功
-- `500 Internal Server Error`: 数据库错误
+| Code | Condition |
+|------|-----------|
+| `500` | Database error |
 
 ---
 
-#### 4.2 更新配置
+### `POST /api/settings`
 
-```http
-POST /api/settings
-```
+Update one or more configuration values. Omitted keys are left unchanged.
 
-**请求体**:
+**Request body**
 
-```json
+```typescript
 {
-  "llm_provider": "anthropic",
-  "llm_model": "claude-3-5-sonnet-20241022",
-  "anthropic_api_key": "sk-ant-api03-xxx",
-  "github_token": "ghp_xxx"
+  llm_provider?: 'anthropic' | 'openai' | 'google' | 'ollama' | 'lmstudio';
+  llm_model?: string;
+  anthropic_api_key?: string;
+  openai_api_key?: string;
+  google_api_key?: string;
+  github_token?: string;
+  compression_enabled?: 'true' | 'false';
+  compression_threshold?: string; // character count as string, e.g. "8000"
 }
 ```
 
-**字段说明**:
-- `llm_provider` (string): LLM 提供商（`anthropic` | `openai` | `google`）
-- `llm_model` (string): 模型名称
-- `anthropic_api_key` (string, optional): Anthropic API Key
-- `openai_api_key` (string, optional): OpenAI API Key
-- `google_api_key` (string, optional): Google API Key
-- `github_token` (string, optional): GitHub Personal Access Token
-
-**响应示例**:
+**Response**
 
 ```json
-{
-  "success": true
-}
+{ "success": true }
 ```
 
-**状态码**:
-- `200 OK`: 更新成功
-- `500 Internal Server Error`: 数据库错误
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | Database error |
 
 ---
 
-#### 4.3 获取系统状态
+### `GET /api/settings/status`
 
-```http
-GET /api/settings/status
-```
+Return a snapshot of the system's current health and configuration state.
 
-**响应示例**:
+**Response**
 
 ```json
 {
@@ -409,129 +443,199 @@ GET /api/settings/status
   "rag": {
     "indexed": true,
     "chunksCount": 234
+  },
+  "compression": {
+    "enabled": true,
+    "lmStudioAvailable": true,
+    "threshold": 8000
   }
 }
 ```
 
-**状态码**:
-- `200 OK`: 成功
-- `500 Internal Server Error`: 系统错误
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | System error |
 
 ---
 
-#### 4.4 获取 Token 使用统计
+## Compression
 
-```http
-GET /api/settings/usage
+### `POST /api/compression/compress`
+
+Compress a block of code or text using the AST + LLM hybrid engine.
+
+**Request body**
+
+```typescript
+{
+  content: string;                            // required — text to compress
+  filename?: string;                          // optional — used for language detection
+  level?: 'light' | 'medium' | 'aggressive'; // optional, default 'medium'
+}
 ```
 
-**响应示例**:
+**Response**
 
 ```json
 {
-  "total": {
-    "promptTokens": 125000,
-    "completionTokens": 45000,
-    "totalTokens": 170000
-  },
-  "byAgent": {
-    "ProtoBuilder": {
-      "promptTokens": 80000,
-      "completionTokens": 30000,
-      "runs": 15
-    },
-    "ReviewBot": {
-      "promptTokens": 30000,
-      "completionTokens": 10000,
-      "runs": 8
-    },
-    "SignalCollector": {
-      "promptTokens": 10000,
-      "completionTokens": 3000,
-      "runs": 5
-    },
-    "ReportGenerator": {
-      "promptTokens": 5000,
-      "completionTokens": 2000,
-      "runs": 2
-    }
-  },
-  "estimatedCost": {
-    "anthropic": "$2.55",
-    "openai": "$0.00",
-    "google": "$0.00"
+  "compressed": "// UserListCard.tsx\ninterface UserListCardProps {...}\nexport function UserListCard(...) {...}",
+  "stats": {
+    "originalChars": 4200,
+    "compressedChars": 980,
+    "reduction": 76.7,
+    "method": "ast",
+    "durationMs": 34
   }
 }
 ```
 
-**说明**:
-- Token 统计从 `agent_traces` 表的 `details` 字段解析
-- 成本估算基于各提供商的定价
+**Errors**
 
-**状态码**:
-- `200 OK`: 成功
-- `500 Internal Server Error`: 数据库错误
+| Code | Condition |
+|------|-----------|
+| `400` | `content` missing |
+| `500` | Compression engine error |
 
 ---
 
-### 5. Traces API
+### `GET /api/compression/stats`
 
-#### 5.1 获取执行日志
+Return aggregate compression statistics for the current session.
 
-```http
-GET /api/traces?runId=xxx
-```
-
-**查询参数**:
-- `runId` (string, required): Agent 运行 ID
-
-**响应示例**:
+**Response**
 
 ```json
-[
-  {
-    "id": 1,
-    "agentName": "ProtoBuilder",
-    "runId": "550e8400-e29b-41d4-a716-446655440000",
-    "step": "Start",
-    "status": "info",
-    "message": "开始为原型项目 [用户列表卡片] 生成代码",
-    "details": null,
-    "createdAt": "2024-01-15T10:30:00.000Z"
+{
+  "totalRequests": 142,
+  "totalOriginalChars": 1840000,
+  "totalCompressedChars": 512000,
+  "averageReduction": 72.2,
+  "methodBreakdown": {
+    "ast": 118,
+    "llm": 21,
+    "fallback": 3
   },
-  {
-    "id": 2,
-    "agentName": "ProtoBuilder",
-    "runId": "550e8400-e29b-41d4-a716-446655440000",
-    "step": "RAG Indexing",
-    "status": "info",
-    "message": "正在更新本地代码库的向量语义索引",
-    "details": null,
-    "createdAt": "2024-01-15T10:30:05.000Z"
-  },
-  {
-    "id": 3,
-    "agentName": "ProtoBuilder",
-    "runId": "550e8400-e29b-41d4-a716-446655440000",
-    "step": "Success",
-    "status": "success",
-    "message": "原型 [用户列表卡片] 生成完毕！",
-    "details": "{\"prUrl\":\"https://github.com/owner/repo/pull/42\"}",
-    "createdAt": "2024-01-15T10:35:00.000Z"
-  }
-]
+  "estimatedTokensSaved": 329400,
+  "estimatedCostSaved": "$0.99"
+}
 ```
 
-**状态码**:
-- `200 OK`: 成功
-- `400 Bad Request`: 缺少 runId
-- `500 Internal Server Error`: 数据库错误
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | Stats calculation error |
 
 ---
 
-## 数据模型
+## Orchestrator
 
-### Prototype
+### `POST /api/orchestrator`
+
+Execute a named DAG workflow. Tasks inside the workflow run in parallel where dependencies allow.
+
+**Request body**
+
+```typescript
+{
+  workflow: string;          // required — workflow name (see available workflows below)
+  params?: Record<string, unknown>; // optional — workflow-specific parameters
+}
+```
+
+Available workflows:
+
+| Name | Description |
+|------|-------------|
+| `full-cycle` | Collect signals → generate report → create prototype |
+| `review-and-merge` | Review PR → update prototype status |
+| `insights-only` | Collect signals + generate report in parallel |
+
+**Response**
+
+```json
+{
+  "runId": "550e8400-e29b-41d4-a716-446655440010",
+  "workflow": "full-cycle",
+  "tasks": [
+    { "id": "collect-signals", "status": "pending" },
+    { "id": "generate-report", "status": "pending", "dependsOn": ["collect-signals"] },
+    { "id": "create-prototype", "status": "pending", "dependsOn": ["generate-report"] }
+  ]
+}
+```
+
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `400` | Unknown workflow name |
+| `500` | Orchestrator error |
+
+---
+
+## Growth
+
+### `POST /api/growth/optimize`
+
+Analyse current UI metrics and signal data to produce ranked feature and optimisation suggestions.
+
+**Request body**
+
+```typescript
+{
+  targetMetric?: 'engagement' | 'retention' | 'conversion'; // optional, default 'engagement'
+  topN?: number;  // optional — number of suggestions to return, default 5
+}
+```
+
+**Response**
+
+```json
+{
+  "suggestions": [
+    {
+      "rank": 1,
+      "title": "Add keyboard shortcuts to prototype editor",
+      "impact": "high",
+      "effort": "low",
+      "rationale": "3 Zendesk tickets and 1 Reddit thread requested this in the past 7 days",
+      "signals": [4, 7, 12]
+    },
+    {
+      "rank": 2,
+      "title": "Add CSV export to insights page",
+      "impact": "medium",
+      "effort": "medium",
+      "rationale": "Highest-volume Amplitude event is 'export_attempt_failed'",
+      "signals": [1]
+    }
+  ],
+  "generatedAt": "2026-06-03T10:00:00.000Z"
+}
+```
+
+**Errors**
+
+| Code | Condition |
+|------|-----------|
+| `500` | Analysis error |
+
+---
+
+## Claude CLI Proxy
+
+### `POST /api/v1/messages`
+
+Anthropic-compatible endpoint. Set `ANTHROPIC_BASE_URL=http://localhost:3000/api/v1` in your environment to route all `claude` CLI calls through APOS. APOS applies context compression automatically and routes the request through its LLM chain.
+
+This endpoint is not intended to be called directly — use it via the Claude CLI or the Anthropic SDK.
+
+---
+
+## Data Models
 
 ```typescript
 interface Prototype {
@@ -546,17 +650,13 @@ interface Prototype {
   prNumber: number | null;
   prUrl: string | null;
   feasibilityReport: string | null;
-  createdAt: string;
+  createdAt: string; // ISO 8601
   updatedAt: string;
 }
-```
 
-### Signal
-
-```typescript
 interface Signal {
   id: number;
-  source: 'amplitude' | 'zendesk' | 'competitor';
+  source: 'amplitude' | 'zendesk' | 'competitor' | 'hackernews' | 'reddit';
   title: string;
   content: string;
   url: string | null;
@@ -565,150 +665,59 @@ interface Signal {
   createdAt: string;
   updatedAt: string;
 }
-```
 
-### AgentTrace
-
-```typescript
 interface AgentTrace {
   id: number;
-  agentName: 'ProtoBuilder' | 'ReviewBot' | 'SignalCollector' | 'ReportGenerator';
-  runId: string;
+  agentName: 'ProtoBuilder' | 'SignalCollector' | 'ReviewBot' | 'ReportGenerator';
+  runId: string; // UUID
   step: string;
   status: 'info' | 'success' | 'warning' | 'error';
   message: string;
   details: string | null; // JSON string
   createdAt: string;
 }
-```
 
-### Report
-
-```typescript
 interface Report {
   filename: string;
   title: string;
-  content: string;
+  content: string;  // Markdown
   createdAt: string;
 }
 ```
 
 ---
 
-## 错误处理
-
-所有 API 端点遵循统一的错误响应格式：
-
-```json
-{
-  "error": "错误描述信息"
-}
-```
-
-### 常见错误码
-
-- `400 Bad Request`: 请求参数错误或缺失
-- `404 Not Found`: 资源不存在
-- `500 Internal Server Error`: 服务器内部错误
-
----
-
-## 使用示例
-
-### 完整工作流示例
-
-#### 1. 创建原型
+## End-to-End Example
 
 ```bash
-curl -X POST http://localhost:3000/api/prototypes \
+BASE="http://localhost:3000/api"
+
+# 1. Create a prototype
+curl -s -X POST $BASE/prototypes \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "用户列表卡片",
-    "description": "显示用户列表的卡片组件，支持分页和搜索"
-  }'
-```
+  -d '{"name":"User List Card","description":"Paginated card showing users with avatar, name, and role badge"}' \
+  | jq .
 
-#### 2. 运行可行性评估
-
-```bash
-curl -X POST http://localhost:3000/api/prototypes/run \
+# 2. Run feasibility check (returns runId)
+RUN=$(curl -s -X POST $BASE/prototypes/run \
   -H "Content-Type: application/json" \
-  -d '{
-    "prototypeId": 1,
-    "assessOnly": true
-  }'
-```
+  -d '{"prototypeId":1,"assessOnly":true}' | jq -r .runId)
 
-#### 3. 轮询执行日志
+# 3. Poll until done
+while true; do
+  STATUS=$(curl -s "$BASE/traces?runId=$RUN" | jq -r '.[-1].status')
+  echo "Latest status: $STATUS"
+  [[ "$STATUS" == "success" || "$STATUS" == "error" ]] && break
+  sleep 2
+done
 
-```bash
-curl http://localhost:3000/api/traces?runId=550e8400-e29b-41d4-a716-446655440000
-```
-
-#### 4. 生成代码
-
-```bash
-curl -X POST http://localhost:3000/api/prototypes/run \
+# 4. Generate the component and open a PR
+RUN2=$(curl -s -X POST $BASE/prototypes/run \
   -H "Content-Type: application/json" \
-  -d '{
-    "prototypeId": 1,
-    "assessOnly": false
-  }'
-```
+  -d '{"prototypeId":1,"assessOnly":false}' | jq -r .runId)
 
-#### 5. 运行代码审查
-
-```bash
-curl -X POST http://localhost:3000/api/pull-requests/review \
+# 5. Review the PR
+curl -s -X POST $BASE/pull-requests/review \
   -H "Content-Type: application/json" \
-  -d '{
-    "prototypeId": 1
-  }'
+  -d '{"prototypeId":1}' | jq .
 ```
-
----
-
-## WebSocket 支持
-
-当前版本使用 HTTP 轮询获取实时日志。未来版本将支持 WebSocket 推送：
-
-```javascript
-// 未来版本
-const ws = new WebSocket('ws://localhost:3000/api/traces/stream');
-ws.onmessage = (event) => {
-  const trace = JSON.parse(event.data);
-  console.log(trace);
-};
-```
-
----
-
-## 速率限制
-
-当前版本无速率限制。生产环境建议添加：
-
-- 每个 IP 每分钟最多 60 次请求
-- Agent 执行每小时最多 10 次
-
----
-
-## 版本控制
-
-API 版本通过 URL 路径管理（未来）：
-
-```
-/api/v1/prototypes
-/api/v2/prototypes
-```
-
-当前版本为 `v1`（隐式）。
-
----
-
-## 更新日志
-
-### v0.1.0 (2024-01-15)
-
-- 初始 API 版本
-- 支持原型管理、信号收集、代码审查
-- 实时执行日志轮询
